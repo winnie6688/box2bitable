@@ -25,6 +25,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Assets
+小程序码.jpg
+
 # Mini Program
 project.private.config.json
 package-lock.json
