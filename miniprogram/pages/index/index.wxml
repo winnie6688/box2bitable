@@ -1,0 +1,20 @@
+<view class="container">
+  <view class="header">
+    <text class="title">鞋盒标签识别</text>
+    <text class="subtitle">支持一拍多盒，AI自动识别</text>
+  </view>
+
+  <view class="upload-section">
+    <view class="upload-card" bindtap="chooseImage">
+      <image class="upload-icon" src="/assets/camera.png" mode="aspectFit" wx:if="{{!tempImagePath}}"></image>
+      <image class="preview-image" src="{{tempImagePath}}" mode="aspectFit" wx:else></image>
+      <text class="upload-tip">{{tempImagePath ? '点击更换图片' : '拍照或从相册选择'}}</text>
+    </view>
+  </view>
+
+  <view class="action-section" wx:if="{{tempImagePath}}">
+    <button class="btn-primary" loading="{{loading}}" disabled="{{loading}}" bindtap="uploadAndRecognize">
+      开始识别
+    </button>
+  </view>
+</view>

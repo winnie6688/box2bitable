@@ -1,0 +1,32 @@
+# Dependency
+node_modules/
+miniprogram_npm/
+
+# Env
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Mini Program
+project.private.config.json
+package-lock.json
+dist/
+unpackage/

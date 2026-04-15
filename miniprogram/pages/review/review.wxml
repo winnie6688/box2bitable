@@ -1,0 +1,40 @@
+<view class="container">
+  <view class="header">
+    <text class="title">人工复核</text>
+    <text class="subtitle">识别到 {{results.length}} 个标签，请核对信息</text>
+  </view>
+
+  <scroll-view class="result-list" scroll-y>
+    <view class="card" wx:for="{{results}}" wx:key="index">
+      <view class="card-header">
+        <text class="supplier-title">{{item.supplier || '未知供应商'}}</text>
+        <text class="tag">#{{index + 1}}</text>
+      </view>
+      
+      <view class="form-item">
+        <text class="label">货号</text>
+        <input class="input" value="{{item.item_no}}" data-index="{{index}}" data-field="item_no" bindinput="onInputChange" />
+      </view>
+
+      <view class="form-row">
+        <view class="form-item half">
+          <text class="label">颜色</text>
+          <input class="input" value="{{item.color}}" data-index="{{index}}" data-field="color" bindinput="onInputChange" />
+        </view>
+        <view class="form-item half">
+          <text class="label">尺码</text>
+          <input class="input" value="{{item.size}}" data-index="{{index}}" data-field="size" bindinput="onInputChange" />
+        </view>
+      </view>
+
+      <view class="card-footer">
+        <button class="btn-delete" size="mini" bindtap="removeResult" data-index="{{index}}">删除此条</button>
+      </view>
+    </view>
+  </scroll-view>
+
+  <view class="footer-actions">
+    <button wx:if="{{!hasFailures}}" class="btn-primary" loading="{{syncing}}" bindtap="confirmSync">确认并同步到飞书</button>
+    <button wx:else class="btn-retry" loading="{{syncing}}" bindtap="retrySync">部分同步失败，点击重试</button>
+  </view>
+</view>
