@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const recognitionController = require('../controllers/recognitionController');
-const multer = require('multer');
-const upload = multer({ dest: 'uploads/' });
+const { upload } = require('../utils/upload');
 
 // 上传图片并识别
 router.post('/upload', upload.single('image'), recognitionController.uploadAndRecognize);

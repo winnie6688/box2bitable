@@ -42,6 +42,12 @@
   padding-bottom: 16rpx;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
 .supplier-title {
   font-size: 32rpx;
   font-weight: bold;
@@ -51,6 +57,39 @@
 .tag {
   font-size: 24rpx;
   color: #8f959e;
+}
+
+.status-badge {
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  line-height: 1;
+}
+
+.status-success {
+  background: rgba(52, 199, 89, 0.12);
+  color: #2ea043;
+}
+
+.status-failed {
+  background: rgba(245, 74, 69, 0.12);
+  color: #f54a45;
+}
+
+.sku-line {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 18rpx;
+}
+
+.sku-label {
+  font-size: 22rpx;
+  color: #8f959e;
+}
+
+.sku-value {
+  font-size: 22rpx;
+  color: #1f2329;
 }
 
 .form-item {
@@ -91,6 +130,52 @@
   color: #f54a45 !important;
   border: 1rpx solid #f54a45 !important;
   background: transparent !important;
+}
+
+.sync-error {
+  margin-top: 12rpx;
+  background: rgba(245, 74, 69, 0.08);
+  padding: 12rpx 16rpx;
+  border-radius: 8rpx;
+}
+
+.sync-error-text {
+  color: #f54a45;
+  font-size: 24rpx;
+}
+
+.failure-panel {
+  margin-top: 20rpx;
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.05);
+  margin-bottom: 40rpx;
+}
+
+.failure-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #1f2329;
+  margin-bottom: 16rpx;
+}
+
+.failure-item {
+  padding: 14rpx 0;
+  border-top: 1rpx solid #f2f3f5;
+}
+
+.failure-sku {
+  display: block;
+  font-size: 26rpx;
+  color: #1f2329;
+}
+
+.failure-msg {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #f54a45;
 }
 
 .footer-actions {

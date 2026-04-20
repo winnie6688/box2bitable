@@ -79,9 +79,17 @@ class DoubaoService {
 
       // Clean the response (sometimes AI wraps it in ```json ... ```)
       const cleanedContent = content.replace(/```json/g, '').replace(/```/g, '').trim();
-      const results = JSON.parse(cleanedContent);
-
-      return results;
+      
+      try {
+        const results = JSON.parse(cleanedContent);
+        if (!Array.isArray(results)) {
+          throw new Error('AI 返回结果不是数组格式');
+        }
+        return results;
+      } catch (parseError) {
+        console.error('AI 响应解析失败:', cleanedContent);
+        throw new Error('AI 响应格式错误，无法解析 JSON: ' + parseError.message);
+      }
     } catch (error) {
       console.error('Error in DoubaoService (OpenAI SDK):', error.message);
       if (error.status) {

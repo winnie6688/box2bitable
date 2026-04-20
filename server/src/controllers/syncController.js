@@ -1,13 +1,9 @@
 const feishuService = require('../services/feishuService');
-const { createClient } = require('@supabase/supabase-js');
+const supabase = require('../utils/supabase');
 const path = require('path');
 const fs = require('fs');
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const { uploadDir } = require('../utils/upload');
+const { generateSkuCode } = require('../utils/formatter');
 
 /**
  * Sync Controller
@@ -24,7 +20,7 @@ const syncData = async (req, res) => {
     // 1. Local Aggregation
     const aggregationMap = {};
     reviewed_data.forEach(item => {
-      const key = `${item.item_no}|${item.color}|${item.size}`;
+      const key = generateSkuCode(item.item_no, item.color, item.size);
       if (aggregationMap[key]) {
         aggregationMap[key].quantity += 1;
       } else {
@@ -47,7 +43,12 @@ const syncData = async (req, res) => {
         .limit(1)
         .single();
       feishuFileToken = imageRecord?.feishu_file_token;
-      console.log('从数据库获取到飞书 Token:', feishuFileToken || '未找到');
+      
+      if (!feishuFileToken) {
+        console.log('[图片同步] 数据库中未找到飞书 Token，将在同步阶段尝试重新上传...');
+      } else {
+        console.log('[图片同步] 从数据库获取到飞书 Token:', feishuFileToken);
+      }
     }
 
     // 3. Sync to Feishu (Passing fileToken)
@@ -57,7 +58,7 @@ const syncData = async (req, res) => {
     if (db_task_id) {
       const syncRecords = syncResults.map(r => ({
         task_id: db_task_id,
-        sku_code: `${r.item.item_no}|${r.item.color}|${r.item.size}`,
+        sku_code: generateSkuCode(r.item.item_no, r.item.color, r.item.size),
         brand: r.item.supplier,
         model: r.item.item_no,
         size: r.item.size,
@@ -85,7 +86,7 @@ const syncData = async (req, res) => {
 
     // 5. Cleanup: Delete temporary image file on full success
     if (task_id) {
-      const filePath = path.join(__dirname, '../../uploads', task_id);
+      const filePath = path.join(uploadDir, task_id);
       if (fs.existsSync(filePath)) {
         try {
           fs.unlinkSync(filePath);
@@ -178,7 +179,7 @@ const retrySync = async (req, res) => {
     // 5. Final check and cleanup
     const finalFailures = syncResults.filter(r => r.status === 'failed');
     if (finalFailures.length === 0 && task_id) {
-      const filePath = path.join(__dirname, '../../uploads', task_id);
+      const filePath = path.join(uploadDir, task_id);
       if (fs.existsSync(filePath)) {
         try {
           fs.unlinkSync(filePath);

@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const multer = require('multer');
 const path = require('path');
 
 // Load environment variables
@@ -14,9 +13,6 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Multer configuration for temporary file storage
-const upload = multer({ dest: 'uploads/' });
 
 // Basic health check route
 app.get('/health', (req, res) => {

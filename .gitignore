@@ -33,3 +33,6 @@ project.private.config.json
 package-lock.json
 dist/
 unpackage/
+
+# Server runtime uploads
+server/uploads/

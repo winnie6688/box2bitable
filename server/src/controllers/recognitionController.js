@@ -1,13 +1,7 @@
 const doubaoService = require('../services/doubaoService');
-const { normalizeSize } = require('../utils/formatter');
+const { normalizeSize, validateSize, generateSkuCode } = require('../utils/formatter');
 const fs = require('fs');
-const { createClient } = require('@supabase/supabase-js');
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = require('../utils/supabase');
 
 /**
  * Recognition Controller
@@ -85,17 +79,31 @@ const uploadAndRecognize = async (req, res) => {
     let results = await doubaoService.recognizeLabels(filePath);
 
     // 4. 格式化数据并持久化结果 (Persistence Step 3)
-    const formattedResults = results.map(item => ({
-      task_id: taskId,
-      image_id: taskImage.id,
-      brand: item.supplier || '',
-      model: item.item_no || '',
-      size: normalizeSize(item.size),
-      color: item.color || '',
-      sku_code: item.item_no ? `${item.item_no}|${item.color || ''}|${normalizeSize(item.size)}` : '',
-      confidence: 1.0, // 假设置信度
-      raw_data: item
-    }));
+    const formattedResults = results.map(item => {
+      const normalizedSize = normalizeSize(item.size);
+      const validation = validateSize(normalizedSize);
+      
+      const skuCode = generateSkuCode(item.item_no, item.color, normalizedSize);
+
+      if (!item.item_no || !normalizedSize) {
+        validation.isAnomaly = true;
+        validation.message = '货号或尺码缺失，无法生成有效 SKU';
+      }
+      
+      return {
+        task_id: taskId,
+        image_id: taskImage.id,
+        brand: item.supplier || '',
+        model: item.item_no || '',
+        size: normalizedSize,
+        color: item.color || '',
+        sku_code: skuCode,
+        confidence: 1.0, // 假设置信度
+        raw_data: item,
+        is_anomaly: validation.isAnomaly,
+        validation_message: validation.message || null
+      };
+    });
 
     const { error: resultsError } = await supabase
       .from('recognition_results')
@@ -119,7 +127,9 @@ const uploadAndRecognize = async (req, res) => {
         item_no: r.model,
         color: r.color,
         size: r.size,
-        supplier: r.brand
+        supplier: r.brand,
+        is_anomaly: r.is_anomaly,
+        validation_message: r.validation_message
       }))
     });
 

@@ -6,7 +6,7 @@
 
   <view class="upload-section">
     <view class="upload-card" bindtap="chooseImage">
-      <image class="upload-icon" src="/assets/camera.png" mode="aspectFit" wx:if="{{!tempImagePath}}"></image>
+      <image class="upload-icon" src="/assets/camera.svg" mode="aspectFit" wx:if="{{!tempImagePath}}"></image>
       <image class="preview-image" src="{{tempImagePath}}" mode="aspectFit" wx:else></image>
       <text class="upload-tip">{{tempImagePath ? '点击更换图片' : '拍照或从相册选择'}}</text>
     </view>

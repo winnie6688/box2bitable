@@ -8,7 +8,17 @@
     <view class="card" wx:for="{{results}}" wx:key="index">
       <view class="card-header">
         <text class="supplier-title">{{item.supplier || '未知供应商'}}</text>
-        <text class="tag">#{{index + 1}}</text>
+        <view class="header-right">
+          <text wx:if="{{item.sync_status}}" class="status-badge status-{{item.sync_status}}">
+            {{item.sync_status === 'success' ? '已同步' : '同步失败'}}
+          </text>
+          <text class="tag">#{{index + 1}}</text>
+        </view>
+      </view>
+
+      <view class="sku-line">
+        <text class="sku-label">SKU_Code</text>
+        <text class="sku-value">{{item.sku_code}}</text>
       </view>
       
       <view class="form-item">
@@ -29,6 +39,18 @@
 
       <view class="card-footer">
         <button class="btn-delete" size="mini" bindtap="removeResult" data-index="{{index}}">删除此条</button>
+      </view>
+
+      <view wx:if="{{item.sync_status === 'failed' && item.sync_error}}" class="sync-error">
+        <text class="sync-error-text">{{item.sync_error}}</text>
+      </view>
+    </view>
+
+    <view wx:if="{{hasFailures}}" class="failure-panel">
+      <view class="failure-title">失败明细（{{failures.length}}）</view>
+      <view class="failure-item" wx:for="{{failures}}" wx:key="index">
+        <text class="failure-sku">{{item.item.item_no}}-{{item.item.color}}-{{item.item.size}}</text>
+        <text class="failure-msg">{{item.error}}</text>
       </view>
     </view>
   </scroll-view>
