@@ -12,5 +12,6 @@
     "navigationBarTitleText": "box2bitable 盘点助手",
     "navigationBarTextStyle": "white"
   },
+  "lazyCodeLoading": "requiredComponents",
   "sitemapLocation": "sitemap.json"
 }
