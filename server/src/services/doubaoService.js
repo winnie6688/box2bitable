@@ -20,9 +20,10 @@ class DoubaoService {
   /**
    * Recognize shoe box labels from a local image file.
    * @param {string} filePath - Path to the image file.
+   * @param {string} moduleKey - purchase / sales / inventory
    * @returns {Promise<Array>} - List of recognized shoe box objects.
    */
-  async recognizeLabels(filePath) {
+  async recognizeLabels(filePath, moduleKey = 'purchase') {
     try {
       if (!this.apiKey || !this.endpointId) {
         throw new Error('ARK_API_KEY or ARK_MODEL_ENDPOINT is not configured in .env');
@@ -31,6 +32,12 @@ class DoubaoService {
       // 1. Convert image to base64
       const imageBase64 = fs.readFileSync(filePath, { encoding: 'base64' });
       const imageData = `data:image/jpeg;base64,${imageBase64}`;
+
+      const module = String(moduleKey || '').trim().toLowerCase() || 'purchase';
+      const needSupplier = module === 'purchase';
+      const supplierRule = needSupplier
+        ? '4. supplier: 供应商（即标签上的品牌或厂家名称，如 豪路, Nike, 耐克旗舰店 等）'
+        : '4. supplier: 供应商（可选字段，若未识别到返回空字符串 ""）';
 
       // 2. Prepare the prompt for shoe box recognition
       const prompt = `
@@ -45,7 +52,7 @@ class DoubaoService {
    - 若识别到的尺码数值在 225–285 之间（如 240、250），视为毫米制，需转换：欧码 = (数值 - 50) / 5。示例：240 → 38，250 → 40。
    - 若识别到的尺码数值在 34–48 之间（如 38、40），视为欧码，无需转换。
    - 只返回最终欧码数值（如 40），不要输出任何解释。若未识别到，返回空字符串 ""。
-4. supplier: 供应商（即标签上的品牌或厂家名称，如 豪路, Nike, 耐克旗舰店 等）
+${supplierRule}
 
 请严格以 JSON 数组格式返回结果，不要包含任何解释性文字或 Markdown 代码块标记。
 示例输出：

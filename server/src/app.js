@@ -22,6 +22,7 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/api/recognition', require('./routes/recognition'));
 app.use('/api/sync', require('./routes/sync'));
+app.use('/api/query', require('./routes/query'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

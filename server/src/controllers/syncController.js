@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { uploadDir } = require('../utils/upload');
 const { generateSkuCode } = require('../utils/formatter');
+const { normalizeModule } = require('../config/modules');
 
 /**
  * Sync Controller
@@ -11,27 +12,35 @@ const { generateSkuCode } = require('../utils/formatter');
  */
 const syncData = async (req, res) => {
   try {
-    const { reviewed_data, task_id, db_task_id } = req.body;
+    const { reviewed_data, task_id, db_task_id, module: moduleRaw } = req.body;
+    const module = normalizeModule(moduleRaw);
 
     if (!reviewed_data || !Array.isArray(reviewed_data)) {
       return res.status(400).json({ success: false, error: '无效的复核数据' });
     }
 
-    // 1. Local Aggregation
-    const aggregationMap = {};
-    reviewed_data.forEach(item => {
-      const key = generateSkuCode(item.item_no, item.color, item.size);
-      if (aggregationMap[key]) {
-        aggregationMap[key].quantity += 1;
-      } else {
-        aggregationMap[key] = {
-          ...item,
-          quantity: 1
-        };
-      }
-    });
-
-    const aggregatedList = Object.values(aggregationMap);
+    let aggregatedList = reviewed_data;
+    if (module !== 'sales') {
+      const aggregationMap = {};
+      reviewed_data.forEach(item => {
+        const key = generateSkuCode(item.item_no, item.color, item.size);
+        if (aggregationMap[key]) {
+          aggregationMap[key].quantity += 1;
+        } else {
+          aggregationMap[key] = {
+            ...item,
+            quantity: 1
+          };
+        }
+      });
+      aggregatedList = Object.values(aggregationMap);
+    } else {
+      aggregatedList = reviewed_data.map((item) => ({
+        ...item,
+        quantity: item.quantity != null && item.quantity !== '' ? Number(item.quantity) : 1,
+        amount: item.amount != null && item.amount !== '' ? Number(item.amount) : undefined,
+      }));
+    }
     
     // 2. 获取提前上传的飞书 Token (Get pre-uploaded token)
     let feishuFileToken = null;
@@ -52,7 +61,7 @@ const syncData = async (req, res) => {
     }
 
     // 3. Sync to Feishu (Passing fileToken)
-    const syncResults = await feishuService.syncToBitable(aggregatedList, task_id, feishuFileToken);
+    const syncResults = await feishuService.syncToBitable(aggregatedList, task_id, feishuFileToken, module);
 
     // 4. Persistence: Record sync results to Supabase
     if (db_task_id) {
@@ -118,7 +127,8 @@ const syncData = async (req, res) => {
  */
 const retrySync = async (req, res) => {
   try {
-    const { db_task_id, task_id } = req.body;
+    const { db_task_id, task_id, module: moduleRaw } = req.body;
+    const module = normalizeModule(moduleRaw);
 
     if (!db_task_id) {
       return res.status(400).json({ success: false, error: '缺少数据库任务ID' });
@@ -154,11 +164,14 @@ const retrySync = async (req, res) => {
       color: r.color,
       size: r.size,
       quantity: r.quantity,
-      supplier: r.brand
+      supplier: r.brand,
+      amount: r.sync_data?.amount,
+      pay_method: r.sync_data?.pay_method,
+      remark: r.sync_data?.remark,
     }));
 
     // 4. Retry Sync (Use pre-uploaded token if available)
-    const syncResults = await feishuService.syncToBitable(aggregatedList, task_id, feishuFileToken);
+    const syncResults = await feishuService.syncToBitable(aggregatedList, task_id, feishuFileToken, module);
 
     // 5. Update existing records in sync_records
     for (let i = 0; i < syncResults.length; i++) {

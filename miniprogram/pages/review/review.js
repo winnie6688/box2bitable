@@ -1,31 +1,50 @@
 Page({
   data: {
     results: [],
+    purchaseGroups: [],
     syncing: false,
     hasFailures: false,
     failures: [],
-    syncSummary: null
+    syncSummary: null,
+    module: 'purchase',
+    moduleLabel: '采购',
+    payOptions: ['支付宝', '微信', '现金', '工商银行'],
+    categoryOptions: ['男单', '女单', '男凉', '女凉']
   },
 
   onLoad(options) {
     const app = getApp();
+    const moduleKey = (options && options.module) ? String(options.module) : (app.globalData.lastModule || 'purchase');
+    const labelMap = { purchase: '采购', sales: '销售', inventory: '库存' };
+    this.setData({
+      module: moduleKey,
+      moduleLabel: labelMap[moduleKey] || moduleKey
+    });
+
     if (app.globalData.lastResults) {
       this.setData({
         results: app.globalData.lastResults,
         taskId: app.globalData.lastTaskId,
         dbTaskId: app.globalData.lastDbTaskId
       });
-      this._refreshSkuCodes();
+      this._recomputeView();
       // 使用完后清空
       app.globalData.lastResults = null;
       app.globalData.lastTaskId = null;
       app.globalData.lastDbTaskId = null;
+      app.globalData.lastModule = null;
     } else if (options.results) {
       this.setData({
         results: JSON.parse(decodeURIComponent(options.results))
       });
-      this._refreshSkuCodes();
+      this._recomputeView();
     }
+  },
+
+  _ensureClientRowId(item, index) {
+    if (item && item.client_row_id) return item.client_row_id;
+    const base = Date.now();
+    return `r_${base}_${index}_${Math.floor(Math.random() * 1e6)}`;
   },
 
   _generateSkuCode(itemNo, color, size) {
@@ -35,28 +54,91 @@ Page({
     return `${cleanNo}-${cleanColor}-${cleanSize}`;
   },
 
-  _refreshSkuCodes() {
-    const results = (this.data.results || []).map(item => {
-      return Object.assign({}, item, {
-        sku_code: this._generateSkuCode(item.item_no, item.color, item.size)
+  _normalizeResults(results, moduleKey) {
+    const module = moduleKey || this.data.module;
+    return (results || []).map((item, index) => {
+      const next = Object.assign({}, item, {
+        client_row_id: this._ensureClientRowId(item, index)
+      });
+      if (module !== 'sales') {
+        next.sku_code = this._generateSkuCode(next.item_no, next.color, next.size);
+      }
+      if (module === 'sales') {
+        if (next.quantity == null || next.quantity === '') next.quantity = 1;
+        if (next.amount == null) next.amount = '';
+        if (!next.pay_method) next.pay_method = '';
+        if (next.remark == null) next.remark = '';
+      }
+      if (module === 'purchase' || module === 'inventory') {
+        if (next.quantity == null || next.quantity === '') next.quantity = 1;
+      }
+      return next;
+    });
+  },
+
+  _buildPurchaseGroups(results) {
+    const groupsByKey = {};
+    const order = [];
+    (results || []).forEach((it, idx) => {
+      const key = String(it.item_no || '').trim() || '未知货号';
+      if (!groupsByKey[key]) {
+        groupsByKey[key] = {
+          groupKey: key,
+          item_no: key,
+          supplier: it.supplier || '',
+          color: it.color || '',
+          category: it.category || '',
+          items: []
+        };
+        order.push(key);
+      } else {
+        if (!groupsByKey[key].supplier && it.supplier) groupsByKey[key].supplier = it.supplier;
+        if (!groupsByKey[key].color && it.color) groupsByKey[key].color = it.color;
+        if (!groupsByKey[key].category && it.category) groupsByKey[key].category = it.category;
+      }
+      groupsByKey[key].items.push({
+        _idx: idx,
+        size: it.size,
+        quantity: it.quantity,
+        sku_code: it.sku_code,
+        sync_status: it.sync_status,
+        sync_error: it.sync_error
       });
     });
-    this.setData({ results });
+    return order.map((k) => groupsByKey[k]);
+  },
+
+  _recomputeView() {
+    const moduleKey = this.data.module;
+    const normalized = this._normalizeResults(this.data.results || [], moduleKey);
+    const patch = { results: normalized };
+    if (moduleKey === 'purchase') {
+      patch.purchaseGroups = this._buildPurchaseGroups(normalized);
+    } else {
+      patch.purchaseGroups = [];
+    }
+    this.setData(patch);
   },
 
   _applySyncStatuses(syncResults) {
     const statusBySku = {};
+    const statusByRow = {};
     (syncResults || []).forEach(r => {
       const syncItem = (r && r.item) ? r.item : {};
-      const sku = this._generateSkuCode(syncItem.item_no, syncItem.color, syncItem.size);
-      statusBySku[sku] = { status: r.status, error: r.error || '' };
+      const rowId = syncItem.client_row_id;
+      if (rowId) {
+        statusByRow[rowId] = { status: r.status, error: r.error || '' };
+      } else {
+        const sku = this._generateSkuCode(syncItem.item_no, syncItem.color, syncItem.size);
+        statusBySku[sku] = { status: r.status, error: r.error || '' };
+      }
     });
 
     const results = (this.data.results || []).map(item => {
       const sku = this._generateSkuCode(item.item_no, item.color, item.size);
-      const matched = statusBySku[sku];
+      const matched = item.client_row_id ? statusByRow[item.client_row_id] : statusBySku[sku];
       return Object.assign({}, item, {
-        sku_code: sku,
+        sku_code: item.sku_code || sku,
         sync_status: matched ? matched.status : '',
         sync_error: matched ? matched.error : ''
       });
@@ -70,10 +152,60 @@ Page({
     const value = e.detail.value;
     const results = this.data.results;
     results[index][field] = value;
-    results[index].sku_code = this._generateSkuCode(results[index].item_no, results[index].color, results[index].size);
     results[index].sync_status = '';
     results[index].sync_error = '';
     this.setData({ results });
+    this._recomputeView();
+  },
+
+  onPayMethodChange(e) {
+    const { index } = e.currentTarget.dataset;
+    const value = this.data.payOptions[e.detail.value];
+    const results = this.data.results;
+    results[index].pay_method = value;
+    results[index].sync_status = '';
+    results[index].sync_error = '';
+    this.setData({ results });
+    this._recomputeView();
+  },
+
+  onPurchaseGroupInputChange(e) {
+    const { groupindex, field } = e.currentTarget.dataset;
+    const value = e.detail.value;
+    const groups = this.data.purchaseGroups || [];
+    const group = groups[groupindex];
+    if (!group) return;
+
+    const results = this.data.results;
+    const indices = (group.items || []).map((x) => x._idx).filter((n) => typeof n === 'number');
+    indices.forEach((idx) => {
+      if (!results[idx]) return;
+      results[idx][field] = value;
+      results[idx].sync_status = '';
+      results[idx].sync_error = '';
+    });
+    this.setData({ results });
+    this._recomputeView();
+  },
+
+  onPurchaseCategoryChange(e) {
+    const { groupindex } = e.currentTarget.dataset;
+    const pickIndex = e.detail.value;
+    const value = this.data.categoryOptions[pickIndex];
+    const groups = this.data.purchaseGroups || [];
+    const group = groups[groupindex];
+    if (!group) return;
+
+    const results = this.data.results;
+    const indices = (group.items || []).map((x) => x._idx).filter((n) => typeof n === 'number');
+    indices.forEach((idx) => {
+      if (!results[idx]) return;
+      results[idx].category = value;
+      results[idx].sync_status = '';
+      results[idx].sync_error = '';
+    });
+    this.setData({ results });
+    this._recomputeView();
   },
 
   removeResult(e) {
@@ -81,11 +213,28 @@ Page({
     const results = this.data.results;
     results.splice(index, 1);
     this.setData({ results });
+    this._recomputeView();
+  },
+
+  _validateBeforeSync() {
+    if (this.data.module !== 'purchase') return { ok: true };
+    const groups = this.data.purchaseGroups || [];
+    const missing = groups.filter((g) => !String(g.category || '').trim()).map((g) => g.item_no || g.groupKey);
+    if (missing.length > 0) {
+      return { ok: false, message: `以下货号未选择品类：${missing.join('、')}` };
+    }
+    return { ok: true };
   },
 
   confirmSync() {
     if (this.data.results.length === 0) {
       wx.showToast({ title: '没有可同步的数据', icon: 'none' });
+      return;
+    }
+
+    const v = this._validateBeforeSync();
+    if (!v.ok) {
+      wx.showModal({ title: '请完善信息', content: v.message, showCancel: false });
       return;
     }
 
@@ -98,7 +247,8 @@ Page({
       data: {
         reviewed_data: this.data.results,
         task_id: this.data.taskId,
-        db_task_id: this.data.dbTaskId
+        db_task_id: this.data.dbTaskId,
+        module: this.data.module
       },
       success: (res) => {
         const syncResults = (res.data && Array.isArray(res.data.results)) ? res.data.results : [];
@@ -153,7 +303,8 @@ Page({
       method: 'POST',
       data: {
         db_task_id: this.data.dbTaskId,
-        task_id: this.data.taskId
+        task_id: this.data.taskId,
+        module: this.data.module
       },
       success: (res) => {
         const syncResults = (res.data && Array.isArray(res.data.results)) ? res.data.results : [];

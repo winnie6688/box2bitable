@@ -2,35 +2,15 @@
 
 ```mermaid
 graph TD
-  A[User Browser] --> B[React Frontend Application]
-  B --> C[Backend Express Server]
-  C --> D[Doubao LLM API]
-  C --> E[Feishu Bitable API]
-  C --> F[Supabase Database]
-
-  subgraph "Frontend Layer"
-      B
-  end
-
-  subgraph "Backend Layer"
-      C
-  end
-
-  subgraph "External Services"
-      D
-      E
-  end
-
-  subgraph "Data Layer"
-      F
-  end
+  A[微信小程序] --> B[Backend Express Server]
+  B --> C[Doubao LLM API]
+  B --> D[Feishu Bitable API]
+  B --> E[Supabase Database]
 ```
 
 ## 2.Technology Description
 
-* Frontend: React\@18 + tailwindcss\@3 + vite
-
-* Initialization Tool: vite-init
+* Frontend: 微信小程序原生（WXML/WXSS/JS）
 
 * Backend: Express\@4 + Node.js\@24
 
@@ -42,29 +22,28 @@ graph TD
 
 ## 3.Route definitions
 
-| Route    | Purpose             |
-| -------- | ------------------- |
-| /        | 图片上传页面，主要的入口页面      |
-| /results | 识别结果展示页面，显示豆包模型识别结果 |
-| /review  | 人工复核页面，用于校验和修正识别数据  |
-| /sync    | 数据同步页面，SKU聚合和飞书表格同步 |
-| /history | 历史记录页面，查看过往同步记录     |
-| /login   | 飞书OAuth登录页面         |
+| Page Route | Purpose |
+|---|---|
+| /pages/home/home | 首页：数据录入 / 数据查询 |
+| /pages/entry/entry | 录入模块选择：采购/销售/库存 |
+| /pages/index/index | 图片上传与识别入口 |
+| /pages/review/review | 人工复核与同步（含失败重试） |
+| /pages/query/query | 库存查询（按货号） |
 
 ## 4.API definitions
 
 ### 4.1 图片上传与识别API
 
 ```
-POST /api/upload
+POST /api/recognition/upload
 ```
 
 Request:
 
 | Param Name | Param Type | isRequired | Description |
 | ---------- | ---------- | ---------- | ----------- |
-| images     | File\[]    | true       | 鞋盒标签图片文件数组  |
-| user\_id   | string     | true       | 用户ID        |
+| image      | File       | true       | 鞋盒标签图片文件 |
+| module     | string     | true       | purchase / sales / inventory |
 
 Response:
 
@@ -77,7 +56,7 @@ Response:
 ### 4.2 识别结果获取API
 
 ```
-GET /api/results/:task_id
+（可选）由业务决定是否需要拆分为“异步查询结果”接口
 ```
 
 Response:
@@ -99,8 +78,14 @@ Request:
 | Param Name      | Param Type | isRequired | Description |
 | --------------- | ---------- | ---------- | ----------- |
 | task\_id        | string     | true       | 识别任务ID      |
-| reviewed\_data  | object     | true       | 人工复核后的数据    |
-| bitable\_config | object     | true       | 飞书多维表格配置    |
+| reviewed\_data  | array      | true       | 人工复核后的数据（支持多条） |
+| module          | string     | true       | purchase / sales / inventory |
+
+### 4.4 库存查询API
+
+```
+GET /api/query/inventory?item_no=xxx
+```
 
 ## 5.Server architecture diagram
 

@@ -1,7 +1,10 @@
 {
   "pages": [
+    "pages/home/home",
+    "pages/entry/entry",
     "pages/index/index",
-    "pages/review/review"
+    "pages/review/review",
+    "pages/query/query"
   ],
   "window": {
     "backgroundTextStyle": "light",

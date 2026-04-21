@@ -36,51 +36,79 @@ graph TD
 
 | 页面路径 | 页面名称 | 功能描述 |
 |---------|---------|----------|
-| /pages/index/index | 拍照首页 | 摄像头拍照、相册选择 |
-| /pages/result/result | 识别结果页面 | 展示识别结果、编辑修正 |
-| /pages/review/review | 复核确认页面 | 数据校验、滑动确认 |
-| /pages/sync/sync | 同步管理页面 | SKU聚合、飞书同步 |
-| /pages/history/history | 历史记录页面 | 查看处理历史 |
-| /pages/settings/settings | 设置页面 | 系统配置、账号管理 |
+| /pages/home/home | 首页 | 两大入口：数据录入 / 数据查询 |
+| /pages/entry/entry | 录入模块选择 | 选择采购/销售/库存 |
+| /pages/index/index | 图片上传 | 拍照/相册选择并上传识别 |
+| /pages/review/review | 人工复核 | 动态字段复核、同步、失败重试 |
+| /pages/query/query | 库存查询 | 输入货号查询尺码与数量 |
 
 ## 4.API definitions
 
 ### 4.1 图片识别API
 
 ```
-POST /api/recognize
+POST /api/recognition/upload
 ```
 
 Request:
 | 参数名 | 类型 | 必填 | 描述 |
 |--------|------|------|------|
-| image | string | 是 | Base64编码的图片数据 |
-| userId | string | 是 | 用户ID |
+| image | file | 是 | 图片文件（multipart/form-data） |
+| module | string | 是 | purchase / sales / inventory |
 
 Response:
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
 | success | boolean | 识别是否成功 |
-| data | object | 识别的标签信息 |
-| message | string | 错误信息 |
+| task_id | string | 文件名标识（用于临时文件定位） |
+| db_task_id | string | 数据库任务ID |
+| results | array | 识别结果数组（支持一图多条） |
 
 ### 4.2 数据同步API
 
 ```
-POST /api/sync-to-feishu
+POST /api/sync
 ```
 
 Request:
 | 参数名 | 类型 | 必填 | 描述 |
 |--------|------|------|------|
-| skuData | array | 是 | SKU数据数组 |
-| tableId | string | 是 | 飞书表格ID |
+| reviewed_data | array | 是 | 人工复核后的数据 |
+| task_id | string | 否 | 图片文件名（用于同步阶段兜底上传） |
+| db_task_id | string | 否 | 数据库任务ID（用于复用 file_token） |
+| module | string | 是 | purchase / sales / inventory |
 
 Response:
 | 参数名 | 类型 | 描述 |
 |--------|------|------|
 | success | boolean | 同步是否成功 |
-| syncedCount | number | 同步成功的数据条数 |
+| results | array | 逐条同步结果（success/failed） |
+
+### 4.3 同步失败重试API
+
+```
+POST /api/sync/retry
+```
+
+Request:
+| 参数名 | 类型 | 必填 |
+|--------|------|------|
+| db_task_id | string | 是 |
+| task_id | string | 否 |
+| module | string | 是 |
+
+### 4.4 库存查询API
+
+```
+GET /api/query/inventory?item_no=xxx
+```
+
+Response:
+| 参数名 | 类型 | 描述 |
+|--------|------|------|
+| success | boolean | 查询是否成功 |
+| item_no | string | 货号 |
+| rows | array | 尺码-数量列表 |
 
 ## 5.Server architecture diagram
 

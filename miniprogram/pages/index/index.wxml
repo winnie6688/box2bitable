@@ -1,7 +1,7 @@
 <view class="container">
   <view class="header">
     <text class="title">鞋盒标签识别</text>
-    <text class="subtitle">支持一拍多盒，AI自动识别</text>
+    <text class="subtitle">当前模块：{{moduleLabel}} · 支持一图多条记录</text>
   </view>
 
   <view class="upload-section">

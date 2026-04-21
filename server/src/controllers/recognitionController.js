@@ -2,6 +2,7 @@ const doubaoService = require('../services/doubaoService');
 const { normalizeSize, validateSize, generateSkuCode } = require('../utils/formatter');
 const fs = require('fs');
 const supabase = require('../utils/supabase');
+const { normalizeModule } = require('../config/modules');
 
 /**
  * Recognition Controller
@@ -14,6 +15,7 @@ const uploadAndRecognize = async (req, res) => {
       return res.status(400).json({ success: false, error: '未接收到图片文件' });
     }
 
+    const module = normalizeModule(req.body?.module);
     const filePath = req.file.path;
     const fileName = req.file.filename;
     console.log('开始识别文件:', filePath);
@@ -76,7 +78,7 @@ const uploadAndRecognize = async (req, res) => {
     }
 
     // 4. 调用豆包 AI 服务
-    let results = await doubaoService.recognizeLabels(filePath);
+    let results = await doubaoService.recognizeLabels(filePath, module);
 
     // 4. 格式化数据并持久化结果 (Persistence Step 3)
     const formattedResults = results.map(item => {
@@ -123,11 +125,13 @@ const uploadAndRecognize = async (req, res) => {
       success: true,
       task_id: fileName, // 保持与前端逻辑一致，使用文件名作为 task_id 标识物理文件
       db_task_id: taskId,
+      module,
       results: formattedResults.map(r => ({
         item_no: r.model,
         color: r.color,
         size: r.size,
         supplier: r.brand,
+        sku_code: r.sku_code,
         is_anomaly: r.is_anomaly,
         validation_message: r.validation_message
       }))
