@@ -1,0 +1,13 @@
+**/node_modules
+**/*.log
+.git
+.github
+.trae
+docs
+supabase
+miniprogram
+miniprogram_npm
+.env
+.env.*
+server/uploads
+server/test_feishu.js
