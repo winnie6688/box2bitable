@@ -1,7 +1,7 @@
 const doubaoService = require('../services/doubaoService');
 const { normalizeSize, validateSize, generateSkuCode } = require('../utils/formatter');
 const fs = require('fs');
-const supabase = require('../utils/supabase');
+const { getSupabase } = require('../utils/supabase');
 const { normalizeModule } = require('../config/modules');
 
 /**
@@ -10,7 +10,9 @@ const { normalizeModule } = require('../config/modules');
  */
 const uploadAndRecognize = async (req, res) => {
   let taskId = null;
+  let supabase = null;
   try {
+    supabase = getSupabase();
     if (!req.file) {
       return res.status(400).json({ success: false, error: '未接收到图片文件' });
     }
@@ -141,7 +143,7 @@ const uploadAndRecognize = async (req, res) => {
     console.error('识别控制器错误:', error);
     
     // 如果任务已创建，更新为失败状态
-    if (taskId) {
+    if (taskId && supabase) {
       await supabase
         .from('recognition_tasks')
         .update({ status: 'failed' })

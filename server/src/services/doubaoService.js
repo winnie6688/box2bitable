@@ -10,11 +10,15 @@ class DoubaoService {
     this.apiKey = process.env.ARK_API_KEY;
     this.endpointId = process.env.ARK_MODEL_ENDPOINT; // The model custom endpoint ID
     this.baseURL = process.env.ARK_API_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3';
-    
-    this.client = new OpenAI({
-      apiKey: this.apiKey,
-      baseURL: this.baseURL,
-    });
+    this.client = null;
+  }
+
+  getClient() {
+    if (this.client) return this.client;
+    const apiKey = process.env.ARK_API_KEY;
+    const baseURL = process.env.ARK_API_BASE_URL || this.baseURL;
+    this.client = new OpenAI({ apiKey, baseURL });
+    return this.client;
   }
 
   /**
@@ -25,6 +29,9 @@ class DoubaoService {
    */
   async recognizeLabels(filePath, moduleKey = 'purchase') {
     try {
+      this.apiKey = process.env.ARK_API_KEY;
+      this.endpointId = process.env.ARK_MODEL_ENDPOINT;
+      this.baseURL = process.env.ARK_API_BASE_URL || this.baseURL;
       if (!this.apiKey || !this.endpointId) {
         throw new Error('ARK_API_KEY or ARK_MODEL_ENDPOINT is not configured in .env');
       }
@@ -63,7 +70,7 @@ ${supplierRule}
       `.trim();
 
       // 3. Call Doubao API using OpenAI SDK
-      const response = await this.client.chat.completions.create({
+      const response = await this.getClient().chat.completions.create({
         model: this.endpointId,
         messages: [
           {

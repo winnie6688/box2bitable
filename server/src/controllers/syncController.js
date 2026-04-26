@@ -1,5 +1,5 @@
 const feishuService = require('../services/feishuService');
-const supabase = require('../utils/supabase');
+const { getSupabase } = require('../utils/supabase');
 const path = require('path');
 const fs = require('fs');
 const { uploadDir } = require('../utils/upload');
@@ -12,6 +12,7 @@ const { normalizeModule } = require('../config/modules');
  */
 const syncData = async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { reviewed_data, task_id, db_task_id, module: moduleRaw } = req.body;
     const module = normalizeModule(moduleRaw);
 
@@ -127,6 +128,7 @@ const syncData = async (req, res) => {
  */
 const retrySync = async (req, res) => {
   try {
+    const supabase = getSupabase();
     const { db_task_id, task_id, module: moduleRaw } = req.body;
     const module = normalizeModule(moduleRaw);
 
