@@ -1,3 +1,5 @@
+const { baseUrl, apiKey } = require('./config');
+
 App({
   onLaunch() {
     // 展示本地存储能力
@@ -7,6 +9,7 @@ App({
   },
   globalData: {
     // 修改为你的后端服务器地址
-    baseUrl: 'http://localhost:3000'
+    baseUrl,
+    apiKey
   }
 })

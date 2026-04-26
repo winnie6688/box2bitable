@@ -2,7 +2,7 @@ const feishuService = require('../services/feishuService');
 const { getSupabase } = require('../utils/supabase');
 const path = require('path');
 const fs = require('fs');
-const { uploadDir } = require('../utils/upload');
+const { resolveUploadPath } = require('../utils/upload');
 const { generateSkuCode } = require('../utils/formatter');
 const { normalizeModule } = require('../config/modules');
 
@@ -96,8 +96,8 @@ const syncData = async (req, res) => {
 
     // 5. Cleanup: Delete temporary image file on full success
     if (task_id) {
-      const filePath = path.join(uploadDir, task_id);
-      if (fs.existsSync(filePath)) {
+      const filePath = resolveUploadPath(task_id);
+      if (filePath && fs.existsSync(filePath)) {
         try {
           fs.unlinkSync(filePath);
           console.log(`[清理] 成功删除临时文件: ${task_id}`);
@@ -194,8 +194,8 @@ const retrySync = async (req, res) => {
     // 5. Final check and cleanup
     const finalFailures = syncResults.filter(r => r.status === 'failed');
     if (finalFailures.length === 0 && task_id) {
-      const filePath = path.join(uploadDir, task_id);
-      if (fs.existsSync(filePath)) {
+      const filePath = resolveUploadPath(task_id);
+      if (filePath && fs.existsSync(filePath)) {
         try {
           fs.unlinkSync(filePath);
           console.log(`[清理] 重试成功，已删除临时文件: ${task_id}`);

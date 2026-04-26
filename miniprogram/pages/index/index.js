@@ -38,6 +38,7 @@ Page({
       url: `${app.globalData.baseUrl}/api/recognition/upload`,
       filePath: this.data.tempImagePath,
       name: 'image',
+      header: app.globalData.apiKey ? { 'x-api-key': app.globalData.apiKey } : {},
       formData: {
         module: this.data.module
       },

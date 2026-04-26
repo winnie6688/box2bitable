@@ -121,7 +121,7 @@ const uploadAndRecognize = async (req, res) => {
       .update({ status: 'completed', processed_images: 1 })
       .eq('id', taskId);
 
-    console.log('识别并持久化成功:', formattedResults);
+    console.log('识别并持久化成功:', { taskId, count: formattedResults.length, module });
     
     res.json({
       success: true,

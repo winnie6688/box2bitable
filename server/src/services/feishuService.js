@@ -1,12 +1,12 @@
 const lark = require('@larksuiteoapi/node-sdk');
 const fs = require('fs');
 const path = require('path');
-const { uploadDir } = require('../utils/upload');
+const { resolveUploadPath } = require('../utils/upload');
 const { generateSkuCode } = require('../utils/formatter');
 const { getModuleConfig, normalizeModule } = require('../config/modules');
 
 const FEISHU_DEBUG = process.env.FEISHU_DEBUG === 'true' || process.env.NODE_ENV !== 'production';
-const FEISHU_DEBUG_SHOW_TOKENS = process.env.FEISHU_DEBUG_SHOW_TOKENS === 'true';
+const FEISHU_DEBUG_SHOW_TOKENS = process.env.FEISHU_DEBUG_SHOW_TOKENS === 'true' && process.env.NODE_ENV !== 'production';
 
 const stringifyForLog = (value, maxLen = 12000) => {
   try {
@@ -205,7 +205,11 @@ class FeishuService {
    * @param {string} filename 
    */
   async uploadAttachment(filename) {
-    const filePath = path.join(uploadDir, filename);
+    const filePath = resolveUploadPath(filename);
+    if (!filePath) {
+      console.error('[图片同步] 非法文件名:', filename);
+      return null;
+    }
     console.log(`[图片同步] 准备上传文件: ${filePath}`);
     
     if (!fs.existsSync(filePath)) {

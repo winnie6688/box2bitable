@@ -244,6 +244,7 @@ Page({
     wx.request({
       url: `${app.globalData.baseUrl}/api/sync`,
       method: 'POST',
+      header: app.globalData.apiKey ? { 'x-api-key': app.globalData.apiKey } : {},
       data: {
         reviewed_data: this.data.results,
         task_id: this.data.taskId,
@@ -301,6 +302,7 @@ Page({
     wx.request({
       url: `${app.globalData.baseUrl}/api/sync/retry`,
       method: 'POST',
+      header: app.globalData.apiKey ? { 'x-api-key': app.globalData.apiKey } : {},
       data: {
         db_task_id: this.data.dbTaskId,
         task_id: this.data.taskId,
