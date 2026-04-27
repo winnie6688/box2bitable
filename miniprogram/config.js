@@ -18,6 +18,22 @@ const baseUrlByEnv = {
 
 const baseUrl = baseUrlByEnv[envVersion] || baseUrlByEnv.release;
 
+const cloudEnvIdByEnv = {
+  develop: '',
+  trial: '',
+  release: '',
+};
+
+const cloudEnvId = cloudEnvIdByEnv[envVersion] || cloudEnvIdByEnv.release;
+
+const cloudServiceByEnv = {
+  develop: 'box2bitable',
+  trial: 'box2bitable',
+  release: 'box2bitable',
+};
+
+const cloudService = cloudServiceByEnv[envVersion] || cloudServiceByEnv.release;
+
 const apiKeyByEnv = {
   develop: '',
   trial: '',
@@ -29,5 +45,7 @@ const apiKey = apiKeyByEnv[envVersion] || apiKeyByEnv.release;
 module.exports = {
   envVersion,
   baseUrl,
+  cloudEnvId,
+  cloudService,
   apiKey,
 };

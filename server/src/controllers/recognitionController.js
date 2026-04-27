@@ -3,6 +3,33 @@ const { normalizeSize, validateSize, generateSkuCode } = require('../utils/forma
 const fs = require('fs');
 const { getSupabase } = require('../utils/supabase');
 const { normalizeModule } = require('../config/modules');
+const path = require('path');
+const { uploadDir } = require('../utils/upload');
+
+const mimeToExt = (mime) => {
+  switch (mime) {
+    case 'image/jpeg':
+      return '.jpg';
+    case 'image/png':
+      return '.png';
+    case 'image/webp':
+      return '.webp';
+    default:
+      return null;
+  }
+};
+
+const parseBase64Image = (input) => {
+  const s = String(input || '').trim();
+  if (!s) return null;
+  const m = s.match(/^data:(image\/(?:jpeg|png|webp));base64,(.+)$/i);
+  if (!m) return null;
+  const mime = m[1].toLowerCase();
+  const b64 = m[2];
+  const buf = Buffer.from(b64, 'base64');
+  if (!buf || buf.length === 0) return null;
+  return { mime, buffer: buf };
+};
 
 /**
  * Recognition Controller
@@ -14,7 +41,31 @@ const uploadAndRecognize = async (req, res) => {
   try {
     supabase = getSupabase();
     if (!req.file) {
-      return res.status(400).json({ success: false, error: '未接收到图片文件' });
+      const parsed = parseBase64Image(
+        req.body?.image_base64 ?? req.body?.imageBase64 ?? req.body?.image
+      );
+      if (!parsed) {
+        return res.status(400).json({ success: false, error: '未接收到图片文件' });
+      }
+
+      const ext = mimeToExt(parsed.mime);
+      if (!ext) {
+        return res.status(400).json({ success: false, error: '不支持的文件类型' });
+      }
+      if (parsed.buffer.length > 10 * 1024 * 1024) {
+        return res.status(400).json({ success: false, error: '图片过大（最大 10MB）' });
+      }
+
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const fileName = `image-${uniqueSuffix}${ext}`;
+      const filePath = path.join(uploadDir, fileName);
+      fs.writeFileSync(filePath, parsed.buffer);
+
+      req.file = {
+        path: filePath,
+        filename: fileName,
+        size: parsed.buffer.length,
+      };
     }
 
     const module = normalizeModule(req.body?.module);
