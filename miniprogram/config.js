@@ -19,9 +19,9 @@ const baseUrlByEnv = {
 const baseUrl = baseUrlByEnv[envVersion] || baseUrlByEnv.release;
 
 const cloudEnvIdByEnv = {
-  develop: '',
-  trial: '',
-  release: '',
+  develop: 'prod-d6gwsf3w487222b9f',
+  trial: 'prod-d6gwsf3w487222b9f',
+  release: 'prod-d6gwsf3w487222b9f',
 };
 
 const cloudEnvId = cloudEnvIdByEnv[envVersion] || cloudEnvIdByEnv.release;
