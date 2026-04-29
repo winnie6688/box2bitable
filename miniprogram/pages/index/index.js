@@ -1,3 +1,22 @@
+const { requestJson } = require('../../utils/containerClient');
+
+const getExtname = (p) => {
+  const s = String(p || '');
+  const i = s.lastIndexOf('.');
+  if (i <= -1) return '';
+  const ext = s.slice(i);
+  if (ext.includes('/') || ext.includes('\\')) return '';
+  return ext.toLowerCase();
+};
+
+const extToMime = (ext) => {
+  const e = String(ext || '').toLowerCase();
+  if (e === '.jpg' || e === '.jpeg') return 'image/jpeg';
+  if (e === '.png') return 'image/png';
+  if (e === '.webp') return 'image/webp';
+  return '';
+};
+
 Page({
   data: {
     tempImagePath: '',
@@ -34,41 +53,49 @@ Page({
     this.setData({ loading: true });
     const app = getApp();
 
-    wx.uploadFile({
-      url: `${app.globalData.baseUrl}/api/recognition/upload`,
+    const fs = wx.getFileSystemManager();
+    fs.readFile({
       filePath: this.data.tempImagePath,
-      name: 'image',
-      formData: {
-        module: this.data.module
-      },
-      success: (res) => {
-        const data = JSON.parse(res.data);
-        if (data.success) {
-          // 将结果、任务ID和数据库任务ID存入全局变量
-          app.globalData.lastResults = data.results;
-          app.globalData.lastTaskId = data.task_id;
-          app.globalData.lastDbTaskId = data.db_task_id;
-          app.globalData.lastModule = data.module || this.data.module;
-          // 跳转到复核页面
-          wx.navigateTo({
-            url: `/pages/review/review?module=${encodeURIComponent(data.module || this.data.module)}`
+      encoding: 'base64',
+      success: async (r) => {
+        try {
+          const ext = getExtname(this.data.tempImagePath);
+          const mime = extToMime(ext);
+          if (!mime) {
+            wx.showToast({ title: '不支持的图片类型', icon: 'none' });
+            return;
+          }
+
+          const data = await requestJson({
+            path: '/api/recognition/upload',
+            method: 'POST',
+            data: {
+              module: this.data.module,
+              image_base64: `data:${mime};base64,${r.data}`,
+            },
           });
-        } else {
-          wx.showToast({
-            title: data.error || '识别失败',
-            icon: 'none'
-          });
+
+          if (data && data.success) {
+            app.globalData.lastResults = data.results;
+            app.globalData.lastTaskId = data.task_id;
+            app.globalData.lastDbTaskId = data.db_task_id;
+            app.globalData.lastModule = data.module || this.data.module;
+            wx.navigateTo({
+              url: `/pages/review/review?module=${encodeURIComponent(data.module || this.data.module)}`
+            });
+          } else {
+            wx.showToast({ title: (data && data.error) || '识别失败', icon: 'none' });
+          }
+        } catch (e) {
+          wx.showToast({ title: e.message || '网络请求失败', icon: 'none' });
+        } finally {
+          this.setData({ loading: false });
         }
       },
-      fail: (err) => {
-        wx.showToast({
-          title: '网络请求失败',
-          icon: 'none'
-        });
-      },
-      complete: () => {
+      fail: () => {
+        wx.showToast({ title: '读取图片失败', icon: 'none' });
         this.setData({ loading: false });
-      }
+      },
     });
   }
 });

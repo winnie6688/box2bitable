@@ -1,3 +1,5 @@
+const { requestJson } = require('../../utils/containerClient');
+
 Page({
   data: {
     itemNo: '',
@@ -18,32 +20,29 @@ Page({
     }
 
     this.setData({ loading: true, rows: [], hasResult: false });
-    const app = getApp();
-
-    wx.request({
-      url: `${app.globalData.baseUrl}/api/query/inventory`,
+    requestJson({
+      path: '/api/query/inventory',
       method: 'GET',
       data: { item_no: itemNo },
-      success: (res) => {
-        if (res.data && res.data.success) {
+    })
+      .then((data) => {
+        if (data && data.success) {
           this.setData({
-            rows: res.data.rows || [],
+            rows: data.rows || [],
             hasResult: true
           });
-          if (!res.data.rows || res.data.rows.length === 0) {
+          if (!data.rows || data.rows.length === 0) {
             wx.showToast({ title: '未找到该货号库存', icon: 'none' });
           }
         } else {
-          wx.showToast({ title: (res.data && res.data.error) || '查询失败', icon: 'none' });
+          wx.showToast({ title: (data && data.error) || '查询失败', icon: 'none' });
         }
-      },
-      fail: () => {
-        wx.showToast({ title: '网络请求失败', icon: 'none' });
-      },
-      complete: () => {
+      })
+      .catch((e) => {
+        wx.showToast({ title: e.message || '网络请求失败', icon: 'none' });
+      })
+      .finally(() => {
         this.setData({ loading: false });
-      }
-    });
+      });
   }
 });
-

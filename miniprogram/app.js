@@ -1,12 +1,19 @@
+const { baseUrl, apiKey, cloudEnvId, cloudService } = require('./config');
+
 App({
   onLaunch() {
-    // 展示本地存储能力
     const logs = wx.getStorageSync('logs') || []
     logs.unshift(Date.now())
     wx.setStorageSync('logs', logs)
+
+    if (wx.cloud && typeof wx.cloud.init === 'function' && cloudEnvId) {
+      wx.cloud.init({ env: cloudEnvId, traceUser: true });
+    }
   },
   globalData: {
-    // 修改为你的后端服务器地址
-    baseUrl: 'http://localhost:3000'
+    baseUrl,
+    apiKey,
+    cloudEnvId,
+    cloudService,
   }
 })
