@@ -1,5 +1,13 @@
-const path = require('path');
 const { requestJson } = require('../../utils/containerClient');
+
+const getExtname = (p) => {
+  const s = String(p || '');
+  const i = s.lastIndexOf('.');
+  if (i <= -1) return '';
+  const ext = s.slice(i);
+  if (ext.includes('/') || ext.includes('\\')) return '';
+  return ext.toLowerCase();
+};
 
 const extToMime = (ext) => {
   const e = String(ext || '').toLowerCase();
@@ -51,7 +59,7 @@ Page({
       encoding: 'base64',
       success: async (r) => {
         try {
-          const ext = path.extname(this.data.tempImagePath || '');
+          const ext = getExtname(this.data.tempImagePath);
           const mime = extToMime(ext);
           if (!mime) {
             wx.showToast({ title: '不支持的图片类型', icon: 'none' });
