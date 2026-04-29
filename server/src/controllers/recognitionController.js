@@ -118,7 +118,8 @@ const uploadAndRecognize = async (req, res) => {
     let feishuFileToken = null;
     try {
       console.log('正在提前上传图片到飞书...');
-      feishuFileToken = await feishuService.uploadAttachment(fileName);
+      const target = feishuService._getBitableTarget(module);
+      feishuFileToken = await feishuService.uploadAttachment(fileName, target.appToken);
       if (feishuFileToken) {
         await supabase
           .from('task_images')

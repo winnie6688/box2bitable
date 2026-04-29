@@ -2,12 +2,24 @@ const rateLimit = () => {
   const windowMs = Number(process.env.RATE_LIMIT_WINDOW_MS || 60_000);
   const max = Number(process.env.RATE_LIMIT_MAX || 120);
   const store = new Map();
+  const sweepIntervalMs = Number(process.env.RATE_LIMIT_SWEEP_INTERVAL_MS || 5 * 60_000);
+  let lastSweepAt = 0;
 
   const now = () => Date.now();
 
   return (req, res, next) => {
     const ip = String(req.ip || '').trim() || 'unknown';
     const t = now();
+
+    if (t - lastSweepAt >= sweepIntervalMs) {
+      lastSweepAt = t;
+      for (const [k, v] of store.entries()) {
+        if (!v || typeof v.resetAt !== 'number' || v.resetAt <= t) {
+          store.delete(k);
+        }
+      }
+    }
+
     const cur = store.get(ip);
     if (!cur || cur.resetAt <= t) {
       store.set(ip, { count: 1, resetAt: t + windowMs });
@@ -25,4 +37,3 @@ const rateLimit = () => {
 };
 
 module.exports = rateLimit;
-

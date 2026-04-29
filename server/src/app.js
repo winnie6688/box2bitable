@@ -13,7 +13,9 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
-app.set('trust proxy', 1);
+if (process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1);
+}
 
 const allowedOrigins = new Set(
   String(process.env.CORS_ORIGINS || '')
@@ -62,6 +64,19 @@ if (require.main === module) {
   });
   server.requestTimeout = Number(process.env.SERVER_REQUEST_TIMEOUT_MS || 65_000);
   server.headersTimeout = Number(process.env.SERVER_HEADERS_TIMEOUT_MS || 70_000);
+
+  const shutdown = (signal) => {
+    console.log(`Received ${signal}, shutting down...`);
+    server.close(() => {
+      process.exit(0);
+    });
+    setTimeout(() => {
+      process.exit(0);
+    }, 8_000).unref();
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 module.exports = app;
