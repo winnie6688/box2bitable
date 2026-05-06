@@ -19,7 +19,6 @@
 ## 3. 技术栈
 - **前端**：微信小程序原生开发 (WXML, WXSS, JS)
 - **后端**：Node.js + Express
-- **数据库/存储**：Supabase (PostgreSQL + Storage)
 - **AI 模型**：豆包 (Doubao) 大模型 API
 - **表格服务**：飞书多维表格 (Feishu Bitable) API
 
@@ -31,7 +30,7 @@
 │   ├── src/
 │   │   ├── controllers/ # 控制器
 │   │   ├── routes/      # 路由
-│   │   ├── services/    # 业务逻辑 (AI, 飞书, Supabase)
+│   │   ├── services/    # 业务逻辑 (AI, 飞书)
 │   │   └── utils/       # 工具类
 │   └── package.json
 ├── miniprogram/        # 微信小程序前端代码

@@ -1,8 +1,7 @@
 const feishuService = require('../services/feishuService');
-const { getSupabase } = require('../utils/supabase');
 const path = require('path');
 const fs = require('fs');
-const { uploadDir } = require('../utils/upload');
+const { resolveUploadPath } = require('../utils/upload');
 const { generateSkuCode } = require('../utils/formatter');
 const { normalizeModule } = require('../config/modules');
 
@@ -12,8 +11,7 @@ const { normalizeModule } = require('../config/modules');
  */
 const syncData = async (req, res) => {
   try {
-    const supabase = getSupabase();
-    const { reviewed_data, task_id, db_task_id, module: moduleRaw } = req.body;
+    const { reviewed_data, task_id, module: moduleRaw, file_token, feishu_file_token } = req.body;
     const module = normalizeModule(moduleRaw);
 
     if (!reviewed_data || !Array.isArray(reviewed_data)) {
@@ -43,45 +41,11 @@ const syncData = async (req, res) => {
       }));
     }
     
-    // 2. 获取提前上传的飞书 Token (Get pre-uploaded token)
-    let feishuFileToken = null;
-    if (db_task_id) {
-      const { data: imageRecord } = await supabase
-        .from('task_images')
-        .select('feishu_file_token')
-        .eq('task_id', db_task_id)
-        .limit(1)
-        .single();
-      feishuFileToken = imageRecord?.feishu_file_token;
-      
-      if (!feishuFileToken) {
-        console.log('[图片同步] 数据库中未找到飞书 Token，将在同步阶段尝试重新上传...');
-      } else {
-        console.log('[图片同步] 从数据库获取到飞书 Token:', feishuFileToken);
-      }
-    }
+    // 2. 获取提前上传的飞书 Token（由前端透传；若没有则同步阶段尝试上传）
+    const feishuFileToken = String(file_token || feishu_file_token || '').trim() || null;
 
     // 3. Sync to Feishu (Passing fileToken)
     const syncResults = await feishuService.syncToBitable(aggregatedList, task_id, feishuFileToken, module);
-
-    // 4. Persistence: Record sync results to Supabase
-    if (db_task_id) {
-      const syncRecords = syncResults.map(r => ({
-        task_id: db_task_id,
-        sku_code: generateSkuCode(r.item.item_no, r.item.color, r.item.size),
-        brand: r.item.supplier,
-        model: r.item.item_no,
-        size: r.item.size,
-        color: r.item.color,
-        quantity: r.item.quantity,
-        bitable_record_id: r.recordId || null,
-        status: r.status === 'success' ? 'success' : 'failed',
-        error_message: r.error || null,
-        sync_data: r.item
-      }));
-
-      await supabase.from('sync_records').insert(syncRecords);
-    }
 
     // 4. Check for failures
     const failures = syncResults.filter(r => r.status === 'failed');
@@ -96,8 +60,8 @@ const syncData = async (req, res) => {
 
     // 5. Cleanup: Delete temporary image file on full success
     if (task_id) {
-      const filePath = path.join(uploadDir, task_id);
-      if (fs.existsSync(filePath)) {
+      const filePath = resolveUploadPath(task_id);
+      if (filePath && fs.existsSync(filePath)) {
         try {
           fs.unlinkSync(filePath);
           console.log(`[清理] 成功删除临时文件: ${task_id}`);
@@ -128,82 +92,39 @@ const syncData = async (req, res) => {
  */
 const retrySync = async (req, res) => {
   try {
-    const supabase = getSupabase();
-    const { db_task_id, task_id, module: moduleRaw } = req.body;
+    const { reviewed_data, task_id, module: moduleRaw, file_token, feishu_file_token } = req.body;
     const module = normalizeModule(moduleRaw);
 
-    if (!db_task_id) {
-      return res.status(400).json({ success: false, error: '缺少数据库任务ID' });
+    if (!reviewed_data || !Array.isArray(reviewed_data) || reviewed_data.length === 0) {
+      return res.status(400).json({ success: false, error: '缺少需要重试的记录（reviewed_data）' });
     }
 
-    // 1. Fetch failed records from sync_records
-    const { data: failedRecords, error: fetchError } = await supabase
-      .from('sync_records')
-      .select('*')
-      .eq('task_id', db_task_id)
-      .eq('status', 'failed');
-
-    if (fetchError) throw fetchError;
-
-    if (!failedRecords || failedRecords.length === 0) {
-      return res.json({ success: true, message: '没有失败的记录需要重试' });
-    }
-
-    // 2. 获取提前上传的飞书 Token (Get pre-uploaded token)
-    let feishuFileToken = null;
-    const { data: imageRecord } = await supabase
-      .from('task_images')
-      .select('feishu_file_token')
-      .eq('task_id', db_task_id)
-      .limit(1)
-      .single();
-    feishuFileToken = imageRecord?.feishu_file_token;
-    console.log('[重试] 获取到飞书 Token:', feishuFileToken || '未找到');
-
-    // 3. Map back to aggregated format for feishuService
-    const aggregatedList = failedRecords.map(r => ({
-      item_no: r.model,
-      color: r.color,
-      size: r.size,
-      quantity: r.quantity,
-      supplier: r.brand,
-      amount: r.sync_data?.amount,
-      pay_method: r.sync_data?.pay_method,
-      remark: r.sync_data?.remark,
-    }));
-
-    // 4. Retry Sync (Use pre-uploaded token if available)
-    const syncResults = await feishuService.syncToBitable(aggregatedList, task_id, feishuFileToken, module);
-
-    // 5. Update existing records in sync_records
-    for (let i = 0; i < syncResults.length; i++) {
-      const result = syncResults[i];
-      const originalRecord = failedRecords[i];
-
-      await supabase
-        .from('sync_records')
-        .update({
-          status: result.status === 'success' ? 'success' : 'failed',
-          bitable_record_id: result.recordId || null,
-          error_message: result.error || null,
-          sync_time: new Date().toISOString()
-        })
-        .eq('id', originalRecord.id);
-    }
-
-    // 5. Final check and cleanup
-    const finalFailures = syncResults.filter(r => r.status === 'failed');
-    if (finalFailures.length === 0 && task_id) {
-      const filePath = path.join(uploadDir, task_id);
-      if (fs.existsSync(filePath)) {
-        try {
-          fs.unlinkSync(filePath);
-          console.log(`[清理] 重试成功，已删除临时文件: ${task_id}`);
-        } catch (e) {
-          console.error(`[清理] 重试成功但删除文件失败: ${e.message}`);
+    let aggregatedList = reviewed_data;
+    if (module !== 'sales') {
+      const aggregationMap = {};
+      reviewed_data.forEach(item => {
+        const key = generateSkuCode(item.item_no, item.color, item.size);
+        if (aggregationMap[key]) {
+          aggregationMap[key].quantity += 1;
+        } else {
+          aggregationMap[key] = {
+            ...item,
+            quantity: 1
+          };
         }
-      }
+      });
+      aggregatedList = Object.values(aggregationMap);
+    } else {
+      aggregatedList = reviewed_data.map((item) => ({
+        ...item,
+        quantity: item.quantity != null && item.quantity !== '' ? Number(item.quantity) : 1,
+        amount: item.amount != null && item.amount !== '' ? Number(item.amount) : undefined,
+      }));
     }
+
+    const feishuFileToken = String(file_token || feishu_file_token || '').trim() || null;
+    const syncResults = await feishuService.syncToBitable(aggregatedList, task_id, feishuFileToken, module);
+    const finalFailures = syncResults.filter(r => r.status === 'failed');
 
     res.json({
       success: finalFailures.length === 0,

@@ -1,5 +1,6 @@
 const OpenAI = require('openai');
 const fs = require('fs');
+const path = require('path');
 
 /**
  * Doubao (Volcengine Ark) Vision Service
@@ -38,7 +39,9 @@ class DoubaoService {
 
       // 1. Convert image to base64
       const imageBase64 = fs.readFileSync(filePath, { encoding: 'base64' });
-      const imageData = `data:image/jpeg;base64,${imageBase64}`;
+      const ext = path.extname(filePath || '').toLowerCase();
+      const mime = ext === '.png' ? 'image/png' : (ext === '.webp' ? 'image/webp' : 'image/jpeg');
+      const imageData = `data:${mime};base64,${imageBase64}`;
 
       const module = String(moduleKey || '').trim().toLowerCase() || 'purchase';
       const needSupplier = module === 'purchase';
@@ -87,9 +90,7 @@ ${supplierRule}
         temperature: 0.1, // Lower temperature for more stable JSON output
       });
 
-      // 4. Parse the JSON response
       const content = response.choices[0].message.content;
-      console.log('Doubao Raw Response:', content);
 
       // Clean the response (sometimes AI wraps it in ```json ... ```)
       const cleanedContent = content.replace(/```json/g, '').replace(/```/g, '').trim();

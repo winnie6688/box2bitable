@@ -25,13 +25,13 @@ Page({
       this.setData({
         results: app.globalData.lastResults,
         taskId: app.globalData.lastTaskId,
-        dbTaskId: app.globalData.lastDbTaskId
+        fileToken: app.globalData.lastFileToken || ''
       });
       this._recomputeView();
       // 使用完后清空
       app.globalData.lastResults = null;
       app.globalData.lastTaskId = null;
-      app.globalData.lastDbTaskId = null;
+      app.globalData.lastFileToken = null;
       app.globalData.lastModule = null;
     } else if (options.results) {
       this.setData({
@@ -239,19 +239,19 @@ Page({
     }
 
     this.setData({ syncing: true, hasFailures: false, failures: [], syncSummary: null });
-    const app = getApp();
-
-    wx.request({
-      url: `${app.globalData.baseUrl}/api/sync`,
+    const { requestJson } = require('../../utils/containerClient');
+    requestJson({
+      path: '/api/sync',
       method: 'POST',
       data: {
         reviewed_data: this.data.results,
         task_id: this.data.taskId,
-        db_task_id: this.data.dbTaskId,
-        module: this.data.module
+        file_token: this.data.fileToken || '',
+        module: this.data.module,
       },
-      success: (res) => {
-        const syncResults = (res.data && Array.isArray(res.data.results)) ? res.data.results : [];
+    })
+      .then((data) => {
+        const syncResults = (data && Array.isArray(data.results)) ? data.results : [];
         const failures = syncResults.filter(r => r.status === 'failed');
         const summary = {
           total: syncResults.length,
@@ -266,48 +266,49 @@ Page({
           syncSummary: summary
         });
 
-        if (res.data.success) {
+        if (data && data.success) {
           wx.showModal({
             title: '同步成功',
             content: `已成功同步至飞书多维表格`,
             showCancel: false,
             success: () => {
-              wx.navigateBack({ delta: 2 }); // 返回首页
+              wx.navigateBack({ delta: 2 });
             }
           });
-        } else if (res.statusCode === 207 || failures.length > 0) {
+        } else if (failures.length > 0) {
           wx.showModal({
             title: '部分同步失败',
             content: `成功 ${summary.success} 条，失败 ${summary.failed} 条。请查看失败明细并重试。`,
             showCancel: false
           });
         } else {
-          wx.showToast({ title: res.data.error || '同步失败', icon: 'none' });
+          wx.showToast({ title: (data && data.error) || '同步失败', icon: 'none' });
         }
-      },
-      fail: () => {
-        wx.showToast({ title: '网络请求失败', icon: 'none' });
-      },
-      complete: () => {
+      })
+      .catch((e) => {
+        wx.showToast({ title: e.message || '网络请求失败', icon: 'none' });
+      })
+      .finally(() => {
         this.setData({ syncing: false });
-      }
-    });
+      });
   },
 
   retrySync() {
     this.setData({ syncing: true });
-    const app = getApp();
-
-    wx.request({
-      url: `${app.globalData.baseUrl}/api/sync/retry`,
+    const { requestJson } = require('../../utils/containerClient');
+    const retryItems = (this.data.failures || []).map((f) => f && f.item).filter(Boolean);
+    requestJson({
+      path: '/api/sync/retry',
       method: 'POST',
       data: {
-        db_task_id: this.data.dbTaskId,
+        reviewed_data: retryItems,
         task_id: this.data.taskId,
-        module: this.data.module
+        file_token: this.data.fileToken || '',
+        module: this.data.module,
       },
-      success: (res) => {
-        const syncResults = (res.data && Array.isArray(res.data.results)) ? res.data.results : [];
+    })
+      .then((data) => {
+        const syncResults = (data && Array.isArray(data.results)) ? data.results : [];
         const failures = syncResults.filter(r => r.status === 'failed');
         const summary = {
           total: syncResults.length,
@@ -319,7 +320,7 @@ Page({
           this._applySyncStatuses(syncResults);
         }
 
-        if (res.data.success) {
+        if (data && data.success) {
           this.setData({ hasFailures: false, failures: [], syncSummary: summary });
           wx.showModal({
             title: '重试成功',
@@ -337,13 +338,12 @@ Page({
             showCancel: false
           });
         }
-      },
-      fail: () => {
-        wx.showToast({ title: '重试网络请求失败', icon: 'none' });
-      },
-      complete: () => {
+      })
+      .catch((e) => {
+        wx.showToast({ title: e.message || '重试网络请求失败', icon: 'none' });
+      })
+      .finally(() => {
         this.setData({ syncing: false });
-      }
-    });
+      });
   }
 });

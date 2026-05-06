@@ -5,7 +5,6 @@ graph TD
   A[微信小程序] --> B[Express API]
   B --> C[豆包大模型]
   B --> D[飞书多维表格]
-  B --> E[(Supabase)]
 ```
 
 ## 2. 领域模型（简化）

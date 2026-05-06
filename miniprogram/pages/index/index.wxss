@@ -41,8 +41,8 @@
 }
 
 .upload-icon {
-  width: 80rpx;
-  height: 80rpx;
+  font-size: 36rpx;
+  color: #3370FF;
   margin-bottom: 24rpx;
 }
 
