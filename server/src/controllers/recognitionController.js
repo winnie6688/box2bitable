@@ -254,20 +254,37 @@ const uploadAndRecognize = async (req, res) => {
     
     // 如果任务已创建，更新为失败状态
     if (taskId && supabase) {
-      await supabase
-        .from('recognition_tasks')
-        .update({ status: 'failed' })
-        .eq('id', taskId);
+      try {
+        await supabase
+          .from('recognition_tasks')
+          .update({ status: 'failed' })
+          .eq('id', taskId);
+      } catch (e) {
+        console.error('更新任务失败状态出错:', e && e.message ? e.message : e);
+      }
     }
 
     // 清理临时文件
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+    try {
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+    } catch (e) {
+      console.error('清理临时文件失败:', e && e.message ? e.message : e);
+    }
+
+    const rawMsg = error && error.message ? String(error.message) : String(error || '');
+    const m = rawMsg.match(/ENOTFOUND\s+([a-z0-9.-]+\.supabase\.co)/i);
+    if (m) {
+      return res.status(503).json({
+        success: false,
+        error: `Supabase 域名解析失败（ENOTFOUND: ${m[1]}）。请检查云托管环境变量 SUPABASE_URL 是否为正确的 https://<project-ref>.supabase.co，并确认云托管网络可访问 supabase.co`,
+      });
     }
 
     res.status(500).json({
       success: false,
-      error: 'AI识别或数据保存失败: ' + error.message
+      error: 'AI识别或数据保存失败: ' + rawMsg
     });
   }
 };
