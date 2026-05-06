@@ -30,6 +30,7 @@ Thumbs.db
 
 # Mini Program
 project.private.config.json
+miniprogram/config.local.js
 package-lock.json
 dist/
 unpackage/

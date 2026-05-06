@@ -1,0 +1,8 @@
+module.exports = {
+  apiKeyByEnv: {
+    develop: '',
+    trial: '',
+    release: '',
+  },
+};
+
