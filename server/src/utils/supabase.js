@@ -1,4 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
+const WebSocket = require('ws');
 
 let supabase = null;
 let supabaseConfigKey = '';
@@ -14,7 +15,10 @@ const getSupabase = () => {
 
   if (supabase && supabaseConfigKey === cfgKey) return supabase;
   supabaseConfigKey = cfgKey;
-  supabase = createClient(url, serviceRoleKey);
+  supabase = createClient(url, serviceRoleKey, {
+    realtime: { transport: WebSocket },
+    global: { WebSocket },
+  });
   return supabase;
 };
 

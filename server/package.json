@@ -28,7 +28,8 @@
     "@supabase/supabase-js": "^2.39.0",
     "axios": "^1.6.2",
     "openai": "^4.20.0",
-    "@larksuiteoapi/node-sdk": "^1.0.0"
+    "@larksuiteoapi/node-sdk": "^1.0.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
