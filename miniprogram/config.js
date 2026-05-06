@@ -16,7 +16,9 @@ const baseUrlByEnv = {
   release: 'https://box2bitable-249568-6-1424272965.sh.run.tcloudbase.com',
 };
 
-const baseUrl = baseUrlByEnv[envVersion] || baseUrlByEnv.release;
+const baseUrl = Object.prototype.hasOwnProperty.call(baseUrlByEnv, envVersion)
+  ? baseUrlByEnv[envVersion]
+  : baseUrlByEnv.release;
 
 const cloudEnvIdByEnv = {
   develop: 'prod-d6gwsf3w487222b9f',
@@ -24,7 +26,9 @@ const cloudEnvIdByEnv = {
   release: 'prod-d6gwsf3w487222b9f',
 };
 
-const cloudEnvId = cloudEnvIdByEnv[envVersion] || cloudEnvIdByEnv.release;
+const cloudEnvId = Object.prototype.hasOwnProperty.call(cloudEnvIdByEnv, envVersion)
+  ? cloudEnvIdByEnv[envVersion]
+  : cloudEnvIdByEnv.release;
 
 const cloudServiceByEnv = {
   develop: 'box2bitable',
@@ -32,7 +36,9 @@ const cloudServiceByEnv = {
   release: 'box2bitable',
 };
 
-const cloudService = cloudServiceByEnv[envVersion] || cloudServiceByEnv.release;
+const cloudService = Object.prototype.hasOwnProperty.call(cloudServiceByEnv, envVersion)
+  ? cloudServiceByEnv[envVersion]
+  : cloudServiceByEnv.release;
 
 const apiKeyByEnv = {
   develop: '',
@@ -40,7 +46,9 @@ const apiKeyByEnv = {
   release: '',
 };
 
-const apiKey = apiKeyByEnv[envVersion] || apiKeyByEnv.release;
+const apiKey = Object.prototype.hasOwnProperty.call(apiKeyByEnv, envVersion)
+  ? apiKeyByEnv[envVersion]
+  : apiKeyByEnv.release;
 
 module.exports = {
   envVersion,
