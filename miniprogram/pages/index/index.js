@@ -1,7 +1,9 @@
 const { requestJson } = require('../../utils/containerClient');
 
+const normalizePath = (p) => String(p || '').trim().replace(/^`|`$/g, '');
+
 const getExtname = (p) => {
-  const s = String(p || '');
+  const s = normalizePath(p);
   const i = s.lastIndexOf('.');
   if (i <= -1) return '';
   const ext = s.slice(i);
@@ -10,17 +12,17 @@ const getExtname = (p) => {
 };
 
 const extToMime = (ext) => {
-  const e = String(ext || '').toLowerCase();
+  const e = normalizePath(ext).toLowerCase();
   if (e === '.jpg' || e === '.jpeg') return 'image/jpeg';
   if (e === '.png') return 'image/png';
   if (e === '.webp') return 'image/webp';
   return '';
 };
 
-const isRemotePath = (p) => /^https?:\/\//i.test(String(p || ''));
+const isRemotePath = (p) => /^https?:\/\//i.test(normalizePath(p));
 
 const ensureLocalFilePath = (p) => {
-  const src = String(p || '');
+  const src = normalizePath(p);
   if (!isRemotePath(src)) return Promise.resolve(src);
   return new Promise((resolve, reject) => {
     wx.downloadFile({
@@ -31,6 +33,40 @@ const ensureLocalFilePath = (p) => {
           return;
         }
         reject(new Error(`downloadFile:fail status=${res.statusCode || 'unknown'}`));
+      },
+      fail: (err) => reject(err),
+    });
+  });
+};
+
+const readLocalAsBase64 = (fs, filePath) => {
+  return new Promise((resolve, reject) => {
+    fs.readFile({
+      filePath,
+      success: (r) => {
+        const data = r && r.data;
+        if (typeof data === 'string') return resolve(data);
+        resolve(wx.arrayBufferToBase64(data));
+      },
+      fail: (err) => reject(err),
+    });
+  });
+};
+
+const readRemoteAsBase64 = (url) => {
+  const src = normalizePath(url);
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: src,
+      method: 'GET',
+      responseType: 'arraybuffer',
+      success: (res) => {
+        const status = Number(res && res.statusCode);
+        if (status >= 200 && status < 300) {
+          resolve(wx.arrayBufferToBase64(res.data));
+          return;
+        }
+        reject(new Error(`request:fail status=${status || 'unknown'}`));
       },
       fail: (err) => reject(err),
     });
@@ -93,16 +129,38 @@ Page({
     tempImagePath: '',
     loading: false,
     module: 'purchase',
-    moduleLabel: '采购'
+    moduleLabel: '采购',
+    debug: {
+      buildAt: '',
+      envVersion: '',
+      platform: '',
+      libVersion: '',
+    },
+    fatalError: ''
   },
 
   onLoad(options) {
-    const moduleKey = options && options.module ? String(options.module) : 'purchase';
-    const labelMap = { purchase: '采购', sales: '销售', inventory: '库存' };
-    this.setData({
-      module: moduleKey,
-      moduleLabel: labelMap[moduleKey] || moduleKey
-    });
+    try {
+      const moduleKey = options && options.module ? String(options.module) : 'purchase';
+      const labelMap = { purchase: '采购', sales: '销售', inventory: '库存' };
+      const app = getApp();
+      const sys = wx.getSystemInfoSync ? wx.getSystemInfoSync() : {};
+      this.setData({
+        module: moduleKey,
+        moduleLabel: labelMap[moduleKey] || moduleKey,
+        fatalError: (app && app.globalData && app.globalData.lastError) ? String(app.globalData.lastError) : '',
+        debug: {
+          buildAt: (app && app.globalData && app.globalData.buildAt) ? String(app.globalData.buildAt) : '',
+          envVersion: (wx.getAccountInfoSync && wx.getAccountInfoSync().miniProgram && wx.getAccountInfoSync().miniProgram.envVersion) || '',
+          platform: sys.platform || '',
+          libVersion: sys.SDKVersion || sys.version || '',
+        },
+      });
+    } catch (e) {
+      this.setData({
+        fatalError: (e && e.message) ? e.message : String(e || 'unknown error'),
+      });
+    }
   },
 
   chooseImage() {
@@ -127,9 +185,17 @@ Page({
     const fs = wx.getFileSystemManager();
     (async () => {
       try {
-        const localPath = await ensureLocalFilePath(this.data.tempImagePath);
+        const originalPath = normalizePath(this.data.tempImagePath);
+        let localPath = originalPath;
+        if (isRemotePath(originalPath)) {
+          try {
+            localPath = await ensureLocalFilePath(originalPath);
+          } catch (e) {
+            localPath = originalPath;
+          }
+        }
         const maxClientBytes = 4 * 1024 * 1024;
-        const preparedPath = await compressIfNeeded(localPath, maxClientBytes);
+        const preparedPath = isRemotePath(localPath) ? localPath : await compressIfNeeded(localPath, maxClientBytes);
         if (preparedPath && preparedPath !== this.data.tempImagePath) this.setData({ tempImagePath: preparedPath });
 
         const mime = await getMimeForPath(preparedPath);
@@ -138,16 +204,20 @@ Page({
           return;
         }
 
-        const arrayBuffer = await new Promise((resolve, reject) => {
-          fs.readFile({
-            filePath: preparedPath,
-            success: (r) => resolve(r.data),
-            fail: (err) => reject(err),
-          });
-        });
-
-        const base64 =
-          typeof arrayBuffer === 'string' ? arrayBuffer : wx.arrayBufferToBase64(arrayBuffer);
+        let base64 = '';
+        if (isRemotePath(preparedPath)) {
+          base64 = await readRemoteAsBase64(preparedPath);
+        } else {
+          try {
+            base64 = await readLocalAsBase64(fs, preparedPath);
+          } catch (e) {
+            if (isRemotePath(originalPath)) {
+              base64 = await readRemoteAsBase64(originalPath);
+            } else {
+              throw e;
+            }
+          }
+        }
 
         const data = await requestJson({
           path: '/api/recognition/upload',
