@@ -25,13 +25,13 @@ Page({
       this.setData({
         results: app.globalData.lastResults,
         taskId: app.globalData.lastTaskId,
-        dbTaskId: app.globalData.lastDbTaskId
+        fileToken: app.globalData.lastFileToken || ''
       });
       this._recomputeView();
       // 使用完后清空
       app.globalData.lastResults = null;
       app.globalData.lastTaskId = null;
-      app.globalData.lastDbTaskId = null;
+      app.globalData.lastFileToken = null;
       app.globalData.lastModule = null;
     } else if (options.results) {
       this.setData({
@@ -246,8 +246,8 @@ Page({
       data: {
         reviewed_data: this.data.results,
         task_id: this.data.taskId,
-        db_task_id: this.data.dbTaskId,
-        module: this.data.module
+        file_token: this.data.fileToken || '',
+        module: this.data.module,
       },
     })
       .then((data) => {
@@ -296,13 +296,15 @@ Page({
   retrySync() {
     this.setData({ syncing: true });
     const { requestJson } = require('../../utils/containerClient');
+    const retryItems = (this.data.failures || []).map((f) => f && f.item).filter(Boolean);
     requestJson({
       path: '/api/sync/retry',
       method: 'POST',
       data: {
-        db_task_id: this.data.dbTaskId,
+        reviewed_data: retryItems,
         task_id: this.data.taskId,
-        module: this.data.module
+        file_token: this.data.fileToken || '',
+        module: this.data.module,
       },
     })
       .then((data) => {

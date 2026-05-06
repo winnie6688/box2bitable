@@ -25,11 +25,9 @@
     "dotenv": "^16.3.1",
     "cors": "^2.8.5",
     "multer": "^1.4.5-lts.1",
-    "@supabase/supabase-js": "^2.39.0",
     "axios": "^1.6.2",
     "openai": "^4.20.0",
-    "@larksuiteoapi/node-sdk": "^1.0.0",
-    "ws": "^8.18.3"
+    "@larksuiteoapi/node-sdk": "^1.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

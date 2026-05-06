@@ -209,7 +209,7 @@ Page({
           if (data && data.success) {
             app.globalData.lastResults = data.results;
             app.globalData.lastTaskId = data.task_id;
-            app.globalData.lastDbTaskId = data.db_task_id;
+            app.globalData.lastFileToken = data.file_token || '';
             app.globalData.lastModule = data.module || this.data.module;
             wx.navigateTo({
               url: `/pages/review/review?module=${encodeURIComponent(data.module || this.data.module)}`
@@ -253,7 +253,7 @@ Page({
         if (data && data.success) {
           app.globalData.lastResults = data.results;
           app.globalData.lastTaskId = data.task_id;
-          app.globalData.lastDbTaskId = data.db_task_id;
+          app.globalData.lastFileToken = data.file_token || '';
           app.globalData.lastModule = data.module || this.data.module;
           wx.navigateTo({
             url: `/pages/review/review?module=${encodeURIComponent(data.module || this.data.module)}`

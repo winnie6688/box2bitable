@@ -1,11 +1,11 @@
 const doubaoService = require('../services/doubaoService');
 const { normalizeSize, validateSize, generateSkuCode } = require('../utils/formatter');
 const fs = require('fs');
-const { getSupabase } = require('../utils/supabase');
 const { normalizeModule } = require('../config/modules');
 const path = require('path');
 const { uploadDir } = require('../utils/upload');
 const axios = require('axios');
+const feishuService = require('../services/feishuService');
 
 const mimeToExt = (mime) => {
   switch (mime) {
@@ -80,10 +80,7 @@ const downloadImageToFile = async (url, dstPath) => {
  * Handles incoming image uploads and calls the AI service.
  */
 const uploadAndRecognize = async (req, res) => {
-  let taskId = null;
-  let supabase = null;
   try {
-    supabase = getSupabase();
     if (!req.file) {
       const parsed = parseBase64Image(
         req.body?.image_base64 ?? req.body?.imageBase64 ?? req.body?.image
@@ -131,68 +128,20 @@ const uploadAndRecognize = async (req, res) => {
     const fileName = req.file.filename;
     console.log('开始识别文件:', filePath);
 
-    // 1. 在数据库中创建任务 (Persistence Step 1)
-    // 假设目前没有用户系统，先创建一个默认用户或模拟用户
-    let { data: user } = await supabase.from('users').select('id').limit(1).single();
-    if (!user) {
-      const { data: newUser, error: userError } = await supabase
-        .from('users')
-        .insert([{ feishu_id: 'default_user', name: '默认管理员' }])
-        .select()
-        .single();
-      if (userError) throw userError;
-      user = newUser;
-    }
-
-    const { data: task, error: taskError } = await supabase
-      .from('recognition_tasks')
-      .insert([{ 
-        user_id: user.id, 
-        status: 'processing',
-        total_images: 1 
-      }])
-      .select()
-      .single();
-    
-    if (taskError) throw taskError;
-    taskId = task.id;
-
-    // 2. 记录图片信息 (Persistence Step 2)
-    const { data: taskImage, error: imageError } = await supabase
-      .from('task_images')
-      .insert([{
-        task_id: taskId,
-        storage_path: filePath,
-        filename: fileName,
-        file_size: req.file.size
-      }])
-      .select()
-      .single();
-
-    if (imageError) throw imageError;
-
-    // 3. 提前上传图片到飞书并获取 token (Real-time Upload Step)
-    const feishuService = require('../services/feishuService');
+    // 1. 提前上传图片到飞书并获取 token（用于后续同步阶段复用）
     let feishuFileToken = null;
     try {
       console.log('正在提前上传图片到飞书...');
       const target = feishuService._getBitableTarget(module);
       feishuFileToken = await feishuService.uploadAttachment(fileName, target.appToken);
-      if (feishuFileToken) {
-        await supabase
-          .from('task_images')
-          .update({ feishu_file_token: feishuFileToken })
-          .eq('id', taskImage.id);
-        console.log('飞书图片 Token 已持久化:', feishuFileToken);
-      }
     } catch (uploadError) {
       console.error('提前上传飞书失败 (不影响识别):', uploadError.message);
     }
 
-    // 4. 调用豆包 AI 服务
+    // 2. 调用豆包 AI 服务
     let results = await doubaoService.recognizeLabels(filePath, module);
 
-    // 4. 格式化数据并持久化结果 (Persistence Step 3)
+    // 3. 格式化数据
     const formattedResults = results.map(item => {
       const normalizedSize = normalizeSize(item.size);
       const validation = validateSize(normalizedSize);
@@ -205,64 +154,27 @@ const uploadAndRecognize = async (req, res) => {
       }
       
       return {
-        task_id: taskId,
-        image_id: taskImage.id,
-        brand: item.supplier || '',
-        model: item.item_no || '',
-        size: normalizedSize,
+        item_no: item.item_no || '',
         color: item.color || '',
+        size: normalizedSize,
+        supplier: item.supplier || '',
         sku_code: skuCode,
-        confidence: 1.0, // 假设置信度
-        raw_data: item,
         is_anomaly: validation.isAnomaly,
-        validation_message: validation.message || null
+        validation_message: validation.message || null,
       };
     });
-
-    const { error: resultsError } = await supabase
-      .from('recognition_results')
-      .insert(formattedResults);
-
-    if (resultsError) throw resultsError;
-
-    // 5. 更新任务状态
-    await supabase
-      .from('recognition_tasks')
-      .update({ status: 'completed', processed_images: 1 })
-      .eq('id', taskId);
-
-    console.log('识别并持久化成功:', { taskId, count: formattedResults.length, module });
+    console.log('识别成功:', { count: formattedResults.length, module });
     
     res.json({
       success: true,
       task_id: fileName, // 保持与前端逻辑一致，使用文件名作为 task_id 标识物理文件
-      db_task_id: taskId,
       module,
-      results: formattedResults.map(r => ({
-        item_no: r.model,
-        color: r.color,
-        size: r.size,
-        supplier: r.brand,
-        sku_code: r.sku_code,
-        is_anomaly: r.is_anomaly,
-        validation_message: r.validation_message
-      }))
+      file_token: feishuFileToken || '',
+      results: formattedResults,
     });
 
   } catch (error) {
     console.error('识别控制器错误:', error);
-    
-    // 如果任务已创建，更新为失败状态
-    if (taskId && supabase) {
-      try {
-        await supabase
-          .from('recognition_tasks')
-          .update({ status: 'failed' })
-          .eq('id', taskId);
-      } catch (e) {
-        console.error('更新任务失败状态出错:', e && e.message ? e.message : e);
-      }
-    }
 
     // 清理临时文件
     try {
@@ -274,17 +186,9 @@ const uploadAndRecognize = async (req, res) => {
     }
 
     const rawMsg = error && error.message ? String(error.message) : String(error || '');
-    const m = rawMsg.match(/ENOTFOUND\s+([a-z0-9.-]+\.supabase\.co)/i);
-    if (m) {
-      return res.status(503).json({
-        success: false,
-        error: `Supabase 域名解析失败（ENOTFOUND: ${m[1]}）。请检查云托管环境变量 SUPABASE_URL 是否为正确的 https://<project-ref>.supabase.co，并确认云托管网络可访问 supabase.co`,
-      });
-    }
-
     res.status(500).json({
       success: false,
-      error: 'AI识别或数据保存失败: ' + rawMsg
+      error: 'AI识别失败: ' + rawMsg
     });
   }
 };
