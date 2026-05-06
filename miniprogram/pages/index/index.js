@@ -1,5 +1,3 @@
-const { requestJson } = require('../../utils/containerClient');
-
 const normalizePath = (p) => String(p || '').trim().replace(/^`|`$/g, '');
 
 const getExtname = (p) => {
@@ -39,40 +37,6 @@ const ensureLocalFilePath = (p) => {
   });
 };
 
-const readLocalAsBase64 = (fs, filePath) => {
-  return new Promise((resolve, reject) => {
-    fs.readFile({
-      filePath,
-      success: (r) => {
-        const data = r && r.data;
-        if (typeof data === 'string') return resolve(data);
-        resolve(wx.arrayBufferToBase64(data));
-      },
-      fail: (err) => reject(err),
-    });
-  });
-};
-
-const readRemoteAsBase64 = (url) => {
-  const src = normalizePath(url);
-  return new Promise((resolve, reject) => {
-    wx.request({
-      url: src,
-      method: 'GET',
-      responseType: 'arraybuffer',
-      success: (res) => {
-        const status = Number(res && res.statusCode);
-        if (status >= 200 && status < 300) {
-          resolve(wx.arrayBufferToBase64(res.data));
-          return;
-        }
-        reject(new Error(`request:fail status=${status || 'unknown'}`));
-      },
-      fail: (err) => reject(err),
-    });
-  });
-};
-
 const getFileSize = (filePath) => {
   return new Promise((resolve) => {
     wx.getFileInfo({
@@ -103,25 +67,6 @@ const compressIfNeeded = async (filePath, maxBytes) => {
     if (size && size <= maxBytes) return current;
   }
   return current;
-};
-
-const getMimeForPath = (filePath) => {
-  const ext = getExtname(filePath);
-  const byExt = extToMime(ext);
-  if (byExt) return Promise.resolve(byExt);
-  return new Promise((resolve) => {
-    wx.getImageInfo({
-      src: filePath,
-      success: (res) => {
-        const t = String(res.type || '').toLowerCase();
-        if (t === 'jpg' || t === 'jpeg') return resolve('image/jpeg');
-        if (t === 'png') return resolve('image/png');
-        if (t === 'webp') return resolve('image/webp');
-        resolve('');
-      },
-      fail: () => resolve('')
-    });
-  });
 };
 
 Page({
@@ -182,51 +127,47 @@ Page({
     this.setData({ loading: true });
     const app = getApp();
 
-    const fs = wx.getFileSystemManager();
     (async () => {
       try {
         const originalPath = normalizePath(this.data.tempImagePath);
         let localPath = originalPath;
-        if (isRemotePath(originalPath)) {
-          try {
-            localPath = await ensureLocalFilePath(originalPath);
-          } catch (e) {
-            localPath = originalPath;
-          }
-        }
+        if (isRemotePath(originalPath)) localPath = await ensureLocalFilePath(originalPath);
+
         const maxClientBytes = 4 * 1024 * 1024;
-        const preparedPath = isRemotePath(localPath) ? localPath : await compressIfNeeded(localPath, maxClientBytes);
+        const preparedPath = await compressIfNeeded(localPath, maxClientBytes);
         if (preparedPath && preparedPath !== this.data.tempImagePath) this.setData({ tempImagePath: preparedPath });
 
-        const mime = await getMimeForPath(preparedPath);
-        if (!mime) {
-          wx.showToast({ title: '不支持的图片类型', icon: 'none' });
-          return;
+        const baseUrl = app && app.globalData ? String(app.globalData.baseUrl || '') : '';
+        if (!baseUrl) {
+          throw new Error('缺少后端 baseUrl 配置，无法上传图片');
         }
 
-        let base64 = '';
-        if (isRemotePath(preparedPath)) {
-          base64 = await readRemoteAsBase64(preparedPath);
-        } else {
+        const uploadResp = await new Promise((resolve, reject) => {
+          wx.uploadFile({
+            url: `${baseUrl}/api/recognition/upload`,
+            filePath: preparedPath,
+            name: 'image',
+            formData: {
+              module: this.data.module,
+            },
+            success: resolve,
+            fail: reject,
+          });
+        });
+
+        const statusCode = uploadResp && typeof uploadResp.statusCode === 'number' ? uploadResp.statusCode : 200;
+        if (statusCode < 200 || statusCode >= 300) {
+          throw new Error(`上传失败 HTTP ${statusCode}`);
+        }
+
+        let data = uploadResp && uploadResp.data;
+        if (typeof data === 'string') {
           try {
-            base64 = await readLocalAsBase64(fs, preparedPath);
+            data = JSON.parse(data);
           } catch (e) {
-            if (isRemotePath(originalPath)) {
-              base64 = await readRemoteAsBase64(originalPath);
-            } else {
-              throw e;
-            }
+            throw new Error('上传返回解析失败');
           }
         }
-
-        const data = await requestJson({
-          path: '/api/recognition/upload',
-          method: 'POST',
-          data: {
-            module: this.data.module,
-            image_base64: `data:${mime};base64,${base64}`,
-          },
-        });
 
         if (data && data.success) {
           app.globalData.lastResults = data.results;
