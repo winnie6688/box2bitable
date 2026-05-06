@@ -5,6 +5,7 @@ const { getSupabase } = require('../utils/supabase');
 const { normalizeModule } = require('../config/modules');
 const path = require('path');
 const { uploadDir } = require('../utils/upload');
+const axios = require('axios');
 
 const mimeToExt = (mime) => {
   switch (mime) {
@@ -31,6 +32,49 @@ const parseBase64Image = (input) => {
   return { mime, buffer: buf };
 };
 
+const isPrivateHostname = (hostname) => {
+  const h = String(hostname || '').trim().toLowerCase();
+  if (!h) return true;
+  if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return true;
+  if (/^127\./.test(h)) return true;
+  if (/^10\./.test(h)) return true;
+  if (/^192\.168\./.test(h)) return true;
+  const m172 = h.match(/^172\.(\d+)\./);
+  if (m172) {
+    const n = Number(m172[1]);
+    if (n >= 16 && n <= 31) return true;
+  }
+  return false;
+};
+
+const downloadImageToFile = async (url, dstPath) => {
+  const u = new URL(String(url || '').trim());
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') {
+    throw new Error('image_url must be http(s)');
+  }
+  if (isPrivateHostname(u.hostname)) {
+    throw new Error('image_url hostname is not allowed');
+  }
+
+  const resp = await axios.get(u.toString(), {
+    responseType: 'arraybuffer',
+    timeout: Number(process.env.IMAGE_FETCH_TIMEOUT_MS || 15_000),
+    maxContentLength: 10 * 1024 * 1024,
+    maxBodyLength: 10 * 1024 * 1024,
+    validateStatus: (s) => s >= 200 && s < 300,
+  });
+
+  const ct = String(resp.headers && resp.headers['content-type'] ? resp.headers['content-type'] : '').toLowerCase();
+  if (!ct.startsWith('image/')) {
+    throw new Error(`image_url content-type is not image: ${ct || 'unknown'}`);
+  }
+  const buf = Buffer.from(resp.data);
+  if (!buf || buf.length === 0) throw new Error('image_url download empty');
+  if (buf.length > 10 * 1024 * 1024) throw new Error('图片过大（最大 10MB）');
+  fs.writeFileSync(dstPath, buf);
+  return { mime: ct.split(';')[0], size: buf.length };
+};
+
 /**
  * Recognition Controller
  * Handles incoming image uploads and calls the AI service.
@@ -44,28 +88,42 @@ const uploadAndRecognize = async (req, res) => {
       const parsed = parseBase64Image(
         req.body?.image_base64 ?? req.body?.imageBase64 ?? req.body?.image
       );
-      if (!parsed) {
-        return res.status(400).json({ success: false, error: '未接收到图片文件' });
-      }
+      if (parsed) {
+        const ext = mimeToExt(parsed.mime);
+        if (!ext) {
+          return res.status(400).json({ success: false, error: '不支持的文件类型' });
+        }
+        if (parsed.buffer.length > 10 * 1024 * 1024) {
+          return res.status(400).json({ success: false, error: '图片过大（最大 10MB）' });
+        }
 
-      const ext = mimeToExt(parsed.mime);
-      if (!ext) {
-        return res.status(400).json({ success: false, error: '不支持的文件类型' });
-      }
-      if (parsed.buffer.length > 10 * 1024 * 1024) {
-        return res.status(400).json({ success: false, error: '图片过大（最大 10MB）' });
-      }
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const fileName = `image-${uniqueSuffix}${ext}`;
+        const filePath = path.join(uploadDir, fileName);
+        fs.writeFileSync(filePath, parsed.buffer);
 
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-      const fileName = `image-${uniqueSuffix}${ext}`;
-      const filePath = path.join(uploadDir, fileName);
-      fs.writeFileSync(filePath, parsed.buffer);
+        req.file = {
+          path: filePath,
+          filename: fileName,
+          size: parsed.buffer.length,
+        };
+      } else {
+        const imageUrl = req.body?.image_url ?? req.body?.imageUrl;
+        if (!imageUrl) {
+          return res.status(400).json({ success: false, error: '未接收到图片文件' });
+        }
 
-      req.file = {
-        path: filePath,
-        filename: fileName,
-        size: parsed.buffer.length,
-      };
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const fileName = `image-${uniqueSuffix}.jpg`;
+        const filePath = path.join(uploadDir, fileName);
+        const info = await downloadImageToFile(imageUrl, filePath);
+
+        req.file = {
+          path: filePath,
+          filename: fileName,
+          size: info.size,
+        };
+      }
     }
 
     const module = normalizeModule(req.body?.module);

@@ -37,6 +37,32 @@ const ensureLocalFilePath = (p) => {
   });
 };
 
+const uploadAndRecognizeViaCloud = async ({ module, filePath }) => {
+  if (!wx.cloud || typeof wx.cloud.uploadFile !== 'function' || typeof wx.cloud.getTempFileURL !== 'function') {
+    throw new Error('wx.cloud is not available');
+  }
+
+  const suffix = getExtname(filePath) || '.jpg';
+  const cloudPath = `box2bitable/${Date.now()}_${Math.floor(Math.random() * 1e6)}${suffix}`;
+  const uploadRes = await wx.cloud.uploadFile({
+    cloudPath,
+    filePath,
+  });
+  const fileID = uploadRes && uploadRes.fileID;
+  if (!fileID) throw new Error('cloud.uploadFile failed');
+
+  const urlRes = await wx.cloud.getTempFileURL({ fileList: [fileID] });
+  const tempUrl = urlRes && urlRes.fileList && urlRes.fileList[0] && urlRes.fileList[0].tempFileURL;
+  if (!tempUrl) throw new Error('cloud.getTempFileURL failed');
+
+  const { requestJson } = require('../../utils/containerClient');
+  return requestJson({
+    path: '/api/recognition/upload',
+    method: 'POST',
+    data: { module, image_url: tempUrl },
+  });
+};
+
 const getFileSize = (filePath) => {
   return new Promise((resolve) => {
     wx.getFileInfo({
@@ -137,10 +163,26 @@ Page({
         const preparedPath = await compressIfNeeded(localPath, maxClientBytes);
         if (preparedPath && preparedPath !== this.data.tempImagePath) this.setData({ tempImagePath: preparedPath });
 
-        const baseUrl = app && app.globalData ? String(app.globalData.baseUrl || '') : '';
-        if (!baseUrl) {
-          throw new Error('缺少后端 baseUrl 配置，无法上传图片');
+        const cloudEnvId = app && app.globalData ? String(app.globalData.cloudEnvId || '') : '';
+        const cloudService = app && app.globalData ? String(app.globalData.cloudService || '') : '';
+        if (wx.cloud && typeof wx.cloud.callContainer === 'function' && cloudEnvId && cloudService) {
+          const data = await uploadAndRecognizeViaCloud({ module: this.data.module, filePath: preparedPath });
+          if (data && data.success) {
+            app.globalData.lastResults = data.results;
+            app.globalData.lastTaskId = data.task_id;
+            app.globalData.lastDbTaskId = data.db_task_id;
+            app.globalData.lastModule = data.module || this.data.module;
+            wx.navigateTo({
+              url: `/pages/review/review?module=${encodeURIComponent(data.module || this.data.module)}`
+            });
+            return;
+          }
+          wx.showToast({ title: (data && data.error) || '识别失败', icon: 'none' });
+          return;
         }
+
+        const baseUrl = app && app.globalData ? String(app.globalData.baseUrl || '') : '';
+        if (!baseUrl) throw new Error('缺少后端 baseUrl 配置，无法上传图片');
 
         const uploadResp = await new Promise((resolve, reject) => {
           wx.uploadFile({
