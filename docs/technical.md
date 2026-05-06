@@ -5,7 +5,6 @@ graph TD
   A[微信小程序] --> B[自建后端 Express]
   B --> C[豆包大模型 API]
   B --> D[飞书多维表格 API]
-  B --> E[Supabase 数据库]
 ```
 
 ## 2. 小程序页面规划
@@ -48,7 +47,7 @@ Response（示例）：
 {
   "success": true,
   "task_id": "image-xxx.jpg",
-  "db_task_id": "uuid",
+  "file_token": "file_xxx",
   "results": [
     { "item_no": "3363-16", "color": "米", "size": "37", "supplier": "一代千金" }
   ]
@@ -66,7 +65,7 @@ Request（JSON）：
 |------|------|------|------|
 | reviewed_data | array | 是 | 复核后的记录数组 |
 | task_id | string | 否 | 图片文件名（用于同步阶段兜底上传图片） |
-| db_task_id | string | 否 | Supabase 任务 ID（用于读取/复用预上传的 file_token） |
+| file_token | string | 否 | 飞书图片 file_token（识别阶段返回；用于同步阶段复用） |
 | module | string | 是 | purchase / sales / inventory |
 
 Response：
@@ -82,8 +81,9 @@ POST /api/sync/retry
 Request（JSON）：
 | 参数名 | 类型 | 必填 |
 |------|------|------|
-| db_task_id | string | 是 |
+| reviewed_data | array | 是 |
 | task_id | string | 否 |
+| file_token | string | 否 |
 | module | string | 是 |
 
 ### 3.5 库存查询（数据查询）
