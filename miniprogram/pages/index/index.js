@@ -37,7 +37,37 @@ const ensureLocalFilePath = (p) => {
   });
 };
 
-const uploadAndRecognizeViaCloud = async ({ module, filePath }) => {
+const callContainerJson = async ({ cloudEnvId, cloudService, apiKey, path, method, data }) => {
+  if (!wx.cloud || typeof wx.cloud.callContainer !== 'function') {
+    throw new Error('wx.cloud.callContainer is not available');
+  }
+  if (!cloudEnvId || !cloudService) {
+    throw new Error('Missing cloudEnvId/cloudService');
+  }
+
+  const res = await new Promise((resolve, reject) => {
+    wx.cloud.callContainer({
+      config: { env: cloudEnvId },
+      path,
+      method,
+      header: Object.assign(
+        {},
+        { 'content-type': 'application/json', 'X-WX-SERVICE': cloudService },
+        apiKey ? { 'x-api-key': apiKey } : {}
+      ),
+      data: data || {},
+      success: resolve,
+      fail: reject,
+    });
+  });
+
+  const statusCode = res && typeof res.statusCode === 'number' ? res.statusCode : 200;
+  if (statusCode >= 200 && statusCode < 300) return res.data;
+  const msg = (res && res.data && (res.data.error || res.data.message)) || `HTTP ${statusCode}`;
+  throw new Error(msg);
+};
+
+const uploadAndRecognizeViaCloud = async ({ cloudEnvId, cloudService, apiKey, module, filePath }) => {
   if (!wx.cloud || typeof wx.cloud.uploadFile !== 'function' || typeof wx.cloud.getTempFileURL !== 'function') {
     throw new Error('wx.cloud is not available');
   }
@@ -55,8 +85,10 @@ const uploadAndRecognizeViaCloud = async ({ module, filePath }) => {
   const tempUrl = urlRes && urlRes.fileList && urlRes.fileList[0] && urlRes.fileList[0].tempFileURL;
   if (!tempUrl) throw new Error('cloud.getTempFileURL failed');
 
-  const { requestJson } = require('../../utils/containerClient');
-  return requestJson({
+  return callContainerJson({
+    cloudEnvId,
+    cloudService,
+    apiKey,
     path: '/api/recognition/upload',
     method: 'POST',
     data: { module, image_url: tempUrl },
@@ -165,8 +197,15 @@ Page({
 
         const cloudEnvId = app && app.globalData ? String(app.globalData.cloudEnvId || '') : '';
         const cloudService = app && app.globalData ? String(app.globalData.cloudService || '') : '';
+        const apiKey = app && app.globalData ? String(app.globalData.apiKey || '') : '';
         if (wx.cloud && typeof wx.cloud.callContainer === 'function' && cloudEnvId && cloudService) {
-          const data = await uploadAndRecognizeViaCloud({ module: this.data.module, filePath: preparedPath });
+          const data = await uploadAndRecognizeViaCloud({
+            cloudEnvId,
+            cloudService,
+            apiKey,
+            module: this.data.module,
+            filePath: preparedPath
+          });
           if (data && data.success) {
             app.globalData.lastResults = data.results;
             app.globalData.lastTaskId = data.task_id;
